@@ -1,0 +1,7 @@
+{
+  "name": "makehaven/makehaven_event_capacity",
+  "type": "drupal-custom-module",
+  "description": "MakeHaven Event Capacity",
+  "license": "GPL-2.0-or-later",
+  "require": {}
+}
