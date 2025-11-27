@@ -1,0 +1,22 @@
+field.formatter.settings.makehaven_event_capacity_message:
+  type: mapping
+  label: 'Smart capacity message formatter settings'
+  mapping:
+    threshold:
+      type: integer
+      label: 'Low availability threshold'
+    message_full:
+      type: label
+      label: 'Full message'
+    message_low:
+      type: label
+      label: 'Low availability message'
+    message_open:
+      type: label
+      label: 'Open message'
+    show_open:
+      type: boolean
+      label: 'Show the open message'
+    hide_past_events:
+      type: boolean
+      label: 'Hide message once the event has passed'

@@ -1,0 +1,7 @@
+services:
+  makehaven_event_capacity.updater:
+    class: \Drupal\makehaven_event_capacity\EventCapacityUpdater
+    arguments:
+      - '@logger.factory'
+      - '@entity_type.manager'
+      - '@civicrm'

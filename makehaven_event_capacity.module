@@ -1,0 +1,169 @@
+<?php
+
+use Drupal\field\Entity\FieldConfig;
+
+/**
+ * Implements hook_civicrm_post().
+ */
+function makehaven_event_capacity_civicrm_post($op, $objectName, $objectId, &$objectRef) {
+  if ($objectName === 'Participant' && in_array($op, ['create', 'edit', 'delete', 'restore'])) {
+    $event_id = NULL;
+    if (isset($objectRef->event_id)) {
+      $event_id = $objectRef->event_id;
+    }
+    elseif ($op === 'delete' && $objectId) {
+      $delete_cache = &drupal_static('_makehaven_event_capacity_participant_event_cache', []);
+      if (isset($delete_cache[$objectId])) {
+        $event_id = $delete_cache[$objectId];
+        unset($delete_cache[$objectId]);
+      }
+    }
+
+    if ($event_id) {
+      \Drupal::service('makehaven_event_capacity.updater')->updateEvent($event_id);
+    }
+  }
+
+  // Also listen for Event changes (capacity change).
+  if ($objectName === 'Event' && in_array($op, ['create', 'edit'])) {
+    \Drupal::service('makehaven_event_capacity.updater')->updateEvent($objectId);
+  }
+}
+
+/**
+ * Implements hook_civicrm_pre().
+ */
+function makehaven_event_capacity_civicrm_pre($op, $objectName, $objectId, &$objectRef) {
+  if ($objectName === 'Participant' && $op === 'delete') {
+    $event_id = NULL;
+    if (is_array($objectRef) && isset($objectRef['event_id'])) {
+      $event_id = $objectRef['event_id'];
+    }
+    elseif (is_object($objectRef) && isset($objectRef->event_id)) {
+      $event_id = $objectRef->event_id;
+    }
+
+    if ($event_id) {
+      $delete_cache = &drupal_static('_makehaven_event_capacity_participant_event_cache', []);
+      $delete_cache[$objectId] = $event_id;
+    }
+  }
+}
+
+/**
+ * Implements hook_entity_bundle_create().
+ * 
+ * Ensure our custom fields are attached to any new CiviCRM Event bundles.
+ */
+function makehaven_event_capacity_entity_bundle_create($entity_type_id, $bundle) {
+  if ($entity_type_id === 'civicrm_event') {
+    $fields = _makehaven_event_capacity_field_definitions();
+    foreach ($fields as $field_name => $definition) {
+      if (!FieldConfig::loadByName('civicrm_event', $bundle, $field_name)) {
+        FieldConfig::create([
+          'field_name' => $field_name,
+          'entity_type' => 'civicrm_event',
+          'bundle' => $bundle,
+          'label' => $definition['label'],
+          'description' => $definition['description'],
+          'required' => FALSE,
+          'settings' => $definition['field_settings'] ?? [],
+        ])->save();
+
+        _makehaven_event_capacity_configure_display($bundle, $field_name, $definition['formatter']);
+      }
+    }
+  }
+}
+
+/**
+ * Configure default field display for a bundle.
+ *
+ * @param string $bundle
+ *   The civicrm_event bundle machine name.
+ * @param string $field_name
+ *   The field to configure.
+ * @param string $formatter
+ *   The formatter ID to use.
+ */
+function _makehaven_event_capacity_configure_display($bundle, $field_name, array $formatter, $force = FALSE) {
+  $display = \Drupal::service('entity_display.repository')
+    ->getViewDisplay('civicrm_event', $bundle, 'default');
+
+  if (!$display) {
+    return;
+  }
+
+  $component = $display->getComponent($field_name);
+  if ($component && !$force) {
+    return;
+  }
+
+  $component = $component ?: [];
+  $component['type'] = $formatter['type'];
+  $component['weight'] = $component['weight'] ?? 99;
+  if (!empty($formatter['settings'])) {
+    $existing_settings = $component['settings'] ?? [];
+    $component['settings'] = $force
+      ? $formatter['settings'] + $existing_settings
+      : $existing_settings + $formatter['settings'];
+  }
+
+  $display->setComponent($field_name, $component)->save();
+}
+
+/**
+ * Shared definitions for the capacity fields.
+ *
+ * @return array
+ *   Field metadata keyed by field machine name.
+ */
+function _makehaven_event_capacity_field_definitions() {
+  return [
+    'field_civi_event_capacity' => [
+      'type' => 'integer',
+      'label' => 'Event Capacity',
+      'description' => 'Total capacity of the event.',
+      'formatter' => [
+        'type' => 'number_integer',
+        'settings' => [],
+      ],
+    ],
+    'field_civi_event_registered' => [
+      'type' => 'integer',
+      'label' => 'Registered Count',
+      'description' => 'Number of registered participants.',
+      'formatter' => [
+        'type' => 'number_integer',
+        'settings' => [],
+      ],
+    ],
+    'field_civi_event_remaining' => [
+      'type' => 'integer',
+      'label' => 'Remaining Slots',
+      'description' => 'Number of remaining slots.',
+      'formatter' => [
+        'type' => 'number_integer',
+        'settings' => [],
+      ],
+    ],
+    'field_civi_event_full_pct' => [
+      'type' => 'decimal',
+      'label' => 'Percent Full',
+      'description' => 'Percentage of capacity filled.',
+      'settings' => [
+        'precision' => 5,
+        'scale' => 2,
+      ],
+      'field_settings' => [
+        'suffix' => '%',
+      ],
+      'formatter' => [
+        'type' => 'number_decimal',
+        'settings' => [
+          'prefix_suffix' => TRUE,
+        ],
+      ],
+    ],
+  ];
+}

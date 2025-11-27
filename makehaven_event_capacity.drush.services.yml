@@ -1,0 +1,7 @@
+services:
+  makehaven_event_capacity.commands:
+    class: \Drupal\makehaven_event_capacity\Commands\MakeHavenEventCapacityCommands
+    arguments:
+      - '@makehaven_event_capacity.updater'
+    tags:
+      - { name: drush.command }

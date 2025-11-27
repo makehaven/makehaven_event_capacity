@@ -1,0 +1,74 @@
+<?php
+
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\field\Entity\FieldConfig;
+
+/**
+ * Implements hook_install().
+ */
+function makehaven_event_capacity_install() {
+  module_load_include('module', 'makehaven_event_capacity');
+  $fields = _makehaven_event_capacity_field_definitions();
+
+  $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
+
+  foreach ($fields as $field_name => $field_info) {
+    // Create Field Storage.
+    if (!FieldStorageConfig::loadByName('civicrm_event', $field_name)) {
+      $storage_settings = [];
+      if (isset($field_info['settings'])) {
+        $storage_settings = $field_info['settings'];
+      }
+      
+      FieldStorageConfig::create([
+        'field_name' => $field_name,
+        'entity_type' => 'civicrm_event',
+        'type' => $field_info['type'],
+        'settings' => $storage_settings,
+        'cardinality' => 1,
+        'translatable' => FALSE,
+      ])->save();
+    }
+
+    // Attach to each bundle.
+    foreach ($bundles as $bundle) {
+      if (!FieldConfig::loadByName('civicrm_event', $bundle, $field_name)) {
+        FieldConfig::create([
+          'field_name' => $field_name,
+          'entity_type' => 'civicrm_event',
+          'bundle' => $bundle,
+          'label' => $field_info['label'],
+          'description' => $field_info['description'],
+          'required' => FALSE,
+          'settings' => $field_info['field_settings'] ?? [],
+        ])->save();
+      }
+
+      _makehaven_event_capacity_configure_display($bundle, $field_name, $field_info['formatter']);
+    }
+  }
+}
+
+/**
+ * Ensure percent full field displays with a percent suffix.
+ */
+function makehaven_event_capacity_update_9001() {
+  module_load_include('module', 'makehaven_event_capacity');
+  $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
+
+  foreach ($bundles as $bundle) {
+    if ($field = FieldConfig::loadByName('civicrm_event', $bundle, 'field_civi_event_full_pct')) {
+      $settings = $field->getSettings();
+      if (($settings['suffix'] ?? '') !== '%') {
+        $settings['suffix'] = '%';
+        $field->set('settings', $settings);
+        $field->save();
+      }
+    }
+
+    _makehaven_event_capacity_configure_display($bundle, 'field_civi_event_full_pct', [
+      'type' => 'number_decimal',
+      'settings' => ['prefix_suffix' => TRUE],
+    ], TRUE);
+  }
+}
