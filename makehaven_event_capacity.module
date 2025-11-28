@@ -20,14 +20,32 @@ function makehaven_event_capacity_civicrm_post($op, $objectName, $objectId, &$ob
     }
 
     if ($event_id) {
-      \Drupal::service('makehaven_event_capacity.updater')->updateEvent($event_id);
+      // Check if we are currently updating this event to prevent recursion.
+      if (\Drupal::service('makehaven_event_capacity.updater')->isEventUpdating($event_id)) {
+        return;
+      }
+      drupal_register_shutdown_function('_makehaven_event_capacity_shutdown_update', $event_id);
     }
   }
 
   // Also listen for Event changes (capacity change).
   if ($objectName === 'Event' && in_array($op, ['create', 'edit'])) {
-    \Drupal::service('makehaven_event_capacity.updater')->updateEvent($objectId);
+    // Check if we are currently updating this event to prevent recursion.
+    if (\Drupal::service('makehaven_event_capacity.updater')->isEventUpdating($objectId)) {
+      return;
+    }
+    drupal_register_shutdown_function('_makehaven_event_capacity_shutdown_update', $objectId);
   }
+}
+
+/**
+ * Shutdown function to update event capacity.
+ *
+ * @param int $event_id
+ *   The event ID to update.
+ */
+function _makehaven_event_capacity_shutdown_update($event_id) {
+  \Drupal::service('makehaven_event_capacity.updater')->updateEvent($event_id);
 }
 
 /**

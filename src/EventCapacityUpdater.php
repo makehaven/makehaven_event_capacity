@@ -32,6 +32,13 @@ class EventCapacityUpdater {
   protected $civicrm;
 
   /**
+   * Track active updates to prevent recursion.
+   *
+   * @var array
+   */
+  protected $activeUpdates = [];
+
+  /**
    * Constructs the updater.
    *
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
@@ -45,6 +52,19 @@ class EventCapacityUpdater {
     $this->logger = $logger_factory->get('makehaven_event_capacity');
     $this->entityTypeManager = $entity_type_manager;
     $this->civicrm = $civicrm;
+  }
+
+  /**
+   * Check if an event is currently being updated.
+   *
+   * @param int $event_id
+   *   The event ID.
+   *
+   * @return bool
+   *   TRUE if updating, FALSE otherwise.
+   */
+  public function isEventUpdating($event_id) {
+    return !empty($this->activeUpdates[$event_id]);
   }
 
   /**
@@ -110,12 +130,11 @@ class EventCapacityUpdater {
       return;
     }
 
-    static $is_updating = [];
-    if (isset($is_updating[$event_id])) {
+    if ($this->isEventUpdating($event_id)) {
       return;
     }
 
-    $is_updating[$event_id] = TRUE;
+    $this->activeUpdates[$event_id] = TRUE;
 
     $this->civicrm->initialize();
 
@@ -152,6 +171,7 @@ class EventCapacityUpdater {
 
       // 4. Update Drupal Entity.
       $storage = $this->entityTypeManager->getStorage('civicrm_event');
+      $storage->resetCache([$event_id]);
       $entity = $storage->load($event_id);
 
       if ($entity) {
@@ -167,7 +187,7 @@ class EventCapacityUpdater {
       $this->logger->error('Failed to update stats for event @id: @message', ['@id' => $event_id, '@message' => $e->getMessage()]);
     }
     finally {
-      unset($is_updating[$event_id]);
+      unset($this->activeUpdates[$event_id]);
     }
   }
 
