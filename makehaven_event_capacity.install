@@ -7,7 +7,7 @@ use Drupal\field\Entity\FieldConfig;
  * Implements hook_install().
  */
 function makehaven_event_capacity_install() {
-  module_load_include('module', 'makehaven_event_capacity');
+  \Drupal::moduleHandler()->loadInclude('makehaven_event_capacity', 'module');
   $fields = _makehaven_event_capacity_field_definitions();
 
   $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
@@ -53,7 +53,7 @@ function makehaven_event_capacity_install() {
  * Ensure percent full field displays with a percent suffix.
  */
 function makehaven_event_capacity_update_9001() {
-  module_load_include('module', 'makehaven_event_capacity');
+  \Drupal::moduleHandler()->loadInclude('makehaven_event_capacity', 'module');
   $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
 
   foreach ($bundles as $bundle) {
