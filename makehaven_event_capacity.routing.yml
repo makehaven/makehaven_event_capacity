@@ -1,7 +1,7 @@
-makehaven_event_capacity.backfill_form:
-  path: '/admin/config/services/makehaven-event-capacity'
+makehaven_event_capacity.settings:
+  path: '/admin/config/makehaven/event-capacity'
   defaults:
-    _form: '\Drupal\makehaven_event_capacity\Form\EventCapacityBackfillForm'
-    _title: 'Event capacity backfill'
+    _form: '\Drupal\makehaven_event_capacity\Form\MakeHavenEventCapacitySettingsForm'
+    _title: 'MakeHaven Event Capacity Settings'
   requirements:
     _permission: 'administer site configuration'

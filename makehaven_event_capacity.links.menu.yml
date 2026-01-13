@@ -1,5 +1,5 @@
-makehaven_event_capacity.backfill_link:
-  title: 'Event capacity backfill'
-  description: 'Recalculate stored event capacity statistics from CiviCRM data.'
-  route_name: makehaven_event_capacity.backfill_form
-  parent: system.admin_config_services
+makehaven_event_capacity.settings:
+  title: 'Event Capacity Marketing'
+  description: 'Configure event capacity marketing thresholds and notifications.'
+  parent: system.admin_config_system
+  route_name: makehaven_event_capacity.settings

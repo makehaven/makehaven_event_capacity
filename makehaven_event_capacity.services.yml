@@ -5,3 +5,6 @@ services:
       - '@logger.factory'
       - '@entity_type.manager'
       - '@civicrm'
+      - '@config.factory'
+      - '@plugin.manager.mail'
+      - '@datetime.time'

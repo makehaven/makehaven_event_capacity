@@ -1,9 +1,9 @@
 name: 'MakeHaven Event Capacity'
 type: module
-description: 'Calculates and stores event capacity stats (registered, remaining, percentage) in Drupal fields for Views filtering.'
+description: 'Calculates event capacity stats and manages marketing status (Early Bird, Flash Sale) with notifications.'
 package: Makerspace
 core_version_requirement: ^9 || ^10 || ^11
 dependencies:
   - civicrm_entity:civicrm_entity
   - civicrm:civicrm
-configure: makehaven_event_capacity.backfill_form
+configure: makehaven_event_capacity.settings

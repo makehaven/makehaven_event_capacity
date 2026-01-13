@@ -1,3 +1,32 @@
+makehaven_event_capacity.settings:
+  type: config_object
+  label: 'MakeHaven Event Capacity Settings'
+  mapping:
+    marketing_early_bird_threshold:
+      type: integer
+      label: 'Early Bird Capacity Threshold (%)'
+    marketing_early_bird_days:
+      type: integer
+      label: 'Early Bird Days in Advance'
+    marketing_early_bird_discount:
+      type: integer
+      label: 'Early Bird Discount (%)'
+    marketing_flash_sale_threshold:
+      type: integer
+      label: 'Flash Sale Capacity Threshold (%)'
+    marketing_flash_sale_days:
+      type: integer
+      label: 'Flash Sale Days in Advance'
+    marketing_flash_sale_discount:
+      type: integer
+      label: 'Flash Sale Discount (%)'
+    marketing_notification_email:
+      type: string
+      label: 'Notification Email'
+    marketing_notification_hours:
+      type: integer
+      label: 'Cancellation Warning Hours'
+
 field.formatter.settings.makehaven_event_capacity_message:
   type: mapping
   label: 'Smart capacity message formatter settings'
@@ -20,3 +49,14 @@ field.formatter.settings.makehaven_event_capacity_message:
     hide_past_events:
       type: boolean
       label: 'Hide message once the event has passed'
+
+field.formatter.settings.makehaven_event_marketing_message:
+  type: mapping
+  label: 'Marketing message formatter settings'
+  mapping:
+    message_early_bird:
+      type: label
+      label: 'Early Bird Message'
+    message_flash_sale:
+      type: label
+      label: 'Flash Sale Message'

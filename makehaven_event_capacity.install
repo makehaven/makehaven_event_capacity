@@ -72,3 +72,57 @@ function makehaven_event_capacity_update_9001() {
     ], TRUE);
   }
 }
+
+/**
+ * Add marketing status fields.
+ */
+function makehaven_event_capacity_update_9002() {
+  \Drupal::moduleHandler()->loadInclude('makehaven_event_capacity', 'module');
+  $fields = _makehaven_event_capacity_field_definitions();
+  $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
+
+  foreach ($fields as $field_name => $field_info) {
+    // Only process the new fields.
+    if (!in_array($field_name, ['field_me_marketing_status', 'field_me_marketing_discount', 'field_me_low_cap_notified'])) {
+      continue;
+    }
+
+    // Create Field Storage.
+    if (!FieldStorageConfig::loadByName('civicrm_event', $field_name)) {
+      $storage_settings = [];
+      if (isset($field_info['settings']) && !empty($field_info['settings']['allowed_values'])) {
+         // Special handling for allowed_values in storage settings if needed,
+         // but usually for list_string it's in storage settings.
+         // Let's check where 'allowed_values' belongs.
+         // For list_string, allowed_values is in storage settings.
+         $storage_settings = $field_info['settings'];
+      }
+      
+      FieldStorageConfig::create([
+        'field_name' => $field_name,
+        'entity_type' => 'civicrm_event',
+        'type' => $field_info['type'],
+        'settings' => $storage_settings,
+        'cardinality' => 1,
+        'translatable' => FALSE,
+      ])->save();
+    }
+
+    // Attach to each bundle.
+    foreach ($bundles as $bundle) {
+      if (!FieldConfig::loadByName('civicrm_event', $bundle, $field_name)) {
+        FieldConfig::create([
+          'field_name' => $field_name,
+          'entity_type' => 'civicrm_event',
+          'bundle' => $bundle,
+          'label' => $field_info['label'],
+          'description' => $field_info['description'],
+          'required' => FALSE,
+          'settings' => $field_info['field_settings'] ?? [],
+        ])->save();
+      }
+
+      _makehaven_event_capacity_configure_display($bundle, $field_name, $field_info['formatter']);
+    }
+  }
+}

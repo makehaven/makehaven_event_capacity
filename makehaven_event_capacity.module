@@ -127,11 +127,105 @@ function _makehaven_event_capacity_configure_display($bundle, $field_name, array
       : $existing_settings + $formatter['settings'];
   }
 
-  $display->setComponent($field_name, $component)->save();
-}
+        $display->setComponent($field_name, $component)->save();
 
-/**
- * Shared definitions for the capacity fields.
+  }
+
+  
+
+  /**
+
+   * Implements hook_cron().
+
+   */
+
+  function makehaven_event_capacity_cron() {
+
+    // We want to update marketing status for upcoming events daily/hourly.
+
+    // We'll search for events starting in the next 14 days (covering the 7 day window).
+
+    // And events starting in 2 days (48 hours) for the notification.
+
+  
+
+    // We can just get all "Upcoming" events from CiviCRM or Drupal.
+
+    // Since the Updater has a way to get events, let's use a query to find relevant ones.
+
+  
+
+    // To be efficient, we might want to query Drupal's civicrm_event entities that have a start date in future.
+
+    $query = \Drupal::entityQuery('civicrm_event')
+
+      ->accessCheck(FALSE)
+
+      ->exists('start_date')
+
+      ->condition('start_date', date('Y-m-d H:i:s'), '>=');
+
+    
+
+    $ids = $query->execute();
+
+  
+
+    if (!empty($ids)) {
+
+      // Process in chunks or just queue them?
+
+      // For now, let's run it directly as the count shouldn't be massive for "upcoming" events.
+
+      // If it is, we should use Queue API.
+
+      \Drupal::service('makehaven_event_capacity.updater')->updateMarketingStatusMultiple($ids);
+
+    }
+
+  }
+
+  
+
+  /**
+
+   * Implements hook_mail().
+
+   */
+
+  function makehaven_event_capacity_mail($key, &$message, $params) {
+
+    if ($key === 'low_capacity_warning') {
+
+      $message['subject'] = t('Low Capacity Warning: @title', ['@title' => $params['event_title']]);
+
+      $message['body'][] = t('The event "@title" is starting in less than 48 hours and is under 50% capacity.', ['@title' => $params['event_title']]);
+
+      $message['body'][] = t('Current Capacity: @registered / @capacity (@percent%)', [
+
+        '@registered' => $params['registered'],
+
+        '@capacity' => $params['capacity'],
+
+        '@percent' => number_format($params['percent'], 1),
+
+      ]);
+
+      $message['body'][] = t('Start Date: @date', ['@date' => $params['start_date']]);
+
+      $message['body'][] = t('Link: @url', ['@url' => $params['link']]);
+
+    }
+
+  }
+
+  
+
+  /**
+
+   * Shared definitions for the capacity fields.
+
+  
  *
  * @return array
  *   Field metadata keyed by field machine name.
@@ -181,6 +275,40 @@ function _makehaven_event_capacity_field_definitions() {
         'settings' => [
           'prefix_suffix' => TRUE,
         ],
+      ],
+    ],
+    'field_me_marketing_status' => [
+      'type' => 'list_string',
+      'label' => 'Marketing Status',
+      'description' => 'Current marketing status based on capacity.',
+      'settings' => [
+        'allowed_values' => [
+          'normal' => 'Normal',
+          'early_bird' => 'Early Bird',
+          'flash_sale' => 'Flash Sale',
+        ],
+      ],
+      'formatter' => [
+        'type' => 'makehaven_event_marketing_message',
+        'settings' => [],
+      ],
+    ],
+    'field_me_marketing_discount' => [
+      'type' => 'integer',
+      'label' => 'Marketing Discount (%)',
+      'description' => 'Active discount percentage.',
+      'formatter' => [
+        'type' => 'number_integer',
+        'settings' => [],
+      ],
+    ],
+    'field_me_low_cap_notified' => [
+      'type' => 'boolean',
+      'label' => 'Low Capacity Notified',
+      'description' => 'Flag if staff has been notified.',
+      'formatter' => [
+        'type' => 'boolean',
+        'settings' => [],
       ],
     ],
   ];
