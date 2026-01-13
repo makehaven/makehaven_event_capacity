@@ -30,6 +30,29 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $config = $this->config('makehaven_event_capacity.settings');
 
+    $form['setup_instructions'] = [
+      '#type' => 'details',
+      '#title' => $this->t('How to show capacity and marketing notices'),
+      '#open' => TRUE,
+    ];
+
+    $form['setup_instructions']['intro'] = [
+      '#markup' => $this->t('These settings control when statuses are calculated. To display notices on event pages, configure the field formatters:'),
+    ];
+
+    $form['setup_instructions']['steps'] = [
+      '#theme' => 'item_list',
+      '#items' => [
+        $this->t('Go to Structure > Content types > Event > Manage display (repeat for each view mode you use).'),
+        $this->t('For the Remaining Slots field, choose the "Smart Capacity Message" formatter and set the Full/Low/Open messages.'),
+        $this->t('For the Marketing Status field, choose the "Marketing Message" formatter and set the Early Bird/Flash Sale copy.'),
+        $this->t('Use @count in capacity messages and @discount in marketing messages to insert live values.'),
+        $this->t('Place the fields where you want the notices to appear and save.'),
+        $this->t('The Marketing Status and Discount fields are auto-calculated by this module; you do not need to edit them manually.'),
+        $this->t('Staff cancellation warnings are only sent when Notification Email(s) is set below.'),
+      ],
+    ];
+
     $form['early_bird'] = [
       '#type' => 'details',
       '#title' => $this->t('Early Bird / Capacity Discount'),
