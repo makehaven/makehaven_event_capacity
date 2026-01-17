@@ -183,7 +183,14 @@ class EventCapacityUpdater {
     try {
       // 1. Get Event Details (Capacity).
       $event = civicrm_api3('Event', 'getsingle', ['id' => $event_id]);
-      $max_participants = isset($event['max_participants']) ? (int) $event['max_participants'] : NULL;
+      
+      // If online registration is disabled, treat capacity as null (unlimited/hidden).
+      if (empty($event['is_online_registration'])) {
+        $max_participants = NULL;
+      }
+      else {
+        $max_participants = isset($event['max_participants']) ? (int) $event['max_participants'] : NULL;
+      }
 
       // 2. Get Participant Count (Registered/Counted).
       // Get statuses that count as "registered".
