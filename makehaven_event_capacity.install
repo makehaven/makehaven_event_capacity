@@ -76,40 +76,75 @@ function makehaven_event_capacity_update_9001() {
 /**
  * Add marketing status fields.
  */
-function makehaven_event_capacity_update_9002() {
+function makehaven_event_capacity_update_9002(&$sandbox) {
   \Drupal::moduleHandler()->loadInclude('makehaven_event_capacity', 'module');
-  $fields = _makehaven_event_capacity_field_definitions();
-  $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
 
-  foreach ($fields as $field_name => $field_info) {
-    // Only process the new fields.
-    if (!in_array($field_name, ['field_me_marketing_status', 'field_me_marketing_discount', 'field_me_low_cap_notified'])) {
-      continue;
-    }
+  if (!isset($sandbox['progress'])) {
+    $sandbox['progress'] = 0;
+    $sandbox['operations'] = [];
 
-    // Create Field Storage.
-    if (!FieldStorageConfig::loadByName('civicrm_event', $field_name)) {
-      $storage_settings = [];
-      if (isset($field_info['settings']) && !empty($field_info['settings']['allowed_values'])) {
-         // Special handling for allowed_values in storage settings if needed,
-         // but usually for list_string it's in storage settings.
-         // Let's check where 'allowed_values' belongs.
-         // For list_string, allowed_values is in storage settings.
-         $storage_settings = $field_info['settings'];
+    $fields = _makehaven_event_capacity_field_definitions();
+    $bundles = array_keys(\Drupal::service('entity_type.bundle.info')->getBundleInfo('civicrm_event'));
+    $target_fields = ['field_me_marketing_status', 'field_me_marketing_discount', 'field_me_low_cap_notified'];
+
+    foreach ($target_fields as $field_name) {
+      if (!isset($fields[$field_name])) {
+        continue;
       }
-      
-      FieldStorageConfig::create([
+      $field_info = $fields[$field_name];
+
+      // Add operation for Field Storage (do this once per field).
+      $sandbox['operations'][] = [
+        'type' => 'storage',
         'field_name' => $field_name,
-        'entity_type' => 'civicrm_event',
-        'type' => $field_info['type'],
-        'settings' => $storage_settings,
-        'cardinality' => 1,
-        'translatable' => FALSE,
-      ])->save();
+        'field_info' => $field_info,
+      ];
+
+      // Add operation for each bundle.
+      foreach ($bundles as $bundle) {
+        $sandbox['operations'][] = [
+          'type' => 'bundle',
+          'field_name' => $field_name,
+          'field_info' => $field_info,
+          'bundle' => $bundle,
+        ];
+      }
+    }
+    $sandbox['max'] = count($sandbox['operations']);
+  }
+
+  $limit = 5; // Process 5 items per run to avoid timeout.
+  
+  for ($i = 0; $i < $limit; $i++) {
+    if (empty($sandbox['operations'])) {
+      break;
     }
 
-    // Attach to each bundle.
-    foreach ($bundles as $bundle) {
+    $op = array_shift($sandbox['operations']);
+    $field_name = $op['field_name'];
+    $field_info = $op['field_info'];
+
+    if ($op['type'] === 'storage') {
+      // Create Field Storage.
+      if (!FieldStorageConfig::loadByName('civicrm_event', $field_name)) {
+        $storage_settings = [];
+        if (isset($field_info['settings'])) {
+          $storage_settings = $field_info['settings'];
+        }
+        
+        FieldStorageConfig::create([
+          'field_name' => $field_name,
+          'entity_type' => 'civicrm_event',
+          'type' => $field_info['type'],
+          'settings' => $storage_settings,
+          'cardinality' => 1,
+          'translatable' => FALSE,
+        ])->save();
+      }
+    }
+    elseif ($op['type'] === 'bundle') {
+      $bundle = $op['bundle'];
+      // Attach to bundle.
       if (!FieldConfig::loadByName('civicrm_event', $bundle, $field_name)) {
         FieldConfig::create([
           'field_name' => $field_name,
@@ -124,5 +159,13 @@ function makehaven_event_capacity_update_9002() {
 
       _makehaven_event_capacity_configure_display($bundle, $field_name, $field_info['formatter']);
     }
+    
+    $sandbox['progress']++;
+  }
+
+  $sandbox['#finished'] = empty($sandbox['operations']) ? 1 : ($sandbox['progress'] / $sandbox['max']);
+  
+  if ($sandbox['#finished'] >= 1) {
+    return t('Marketing status fields added successfully.');
   }
 }
