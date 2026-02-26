@@ -231,8 +231,8 @@ class EventCapacityUpdater {
         
         // Also update marketing status since we have the entity loaded and stats calculated.
         $this->updateMarketingStatus($entity);
-        
-        $entity->save();
+
+        $this->saveEntityWithRetry($entity, (int) $event_id);
       }
 
     }
@@ -259,8 +259,55 @@ class EventCapacityUpdater {
 
     foreach ($entities as $entity) {
       $this->updateMarketingStatus($entity);
-      $entity->save();
+      $this->saveEntityWithRetry($entity, (int) $entity->id());
     }
+  }
+
+  /**
+   * Save an entity with retries for transient database lock conflicts.
+   *
+   * @param \Drupal\Core\Entity\EntityInterface $entity
+   *   The entity to save.
+   * @param int $event_id
+   *   Event ID for logging context.
+   * @param int $max_attempts
+   *   Maximum save attempts.
+   */
+  protected function saveEntityWithRetry(EntityInterface $entity, int $event_id, int $max_attempts = 3): void {
+    for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
+      try {
+        $entity->save();
+        return;
+      }
+      catch (\Throwable $e) {
+        if (!$this->isRetryableDatabaseError($e) || $attempt >= $max_attempts) {
+          throw $e;
+        }
+
+        $this->logger->warning(
+          'Transient DB lock while saving event @id (attempt @attempt/@max). Retrying. Error: @message',
+          [
+            '@id' => $event_id,
+            '@attempt' => $attempt,
+            '@max' => $max_attempts,
+            '@message' => $e->getMessage(),
+          ]
+        );
+
+        // Brief linear backoff gives the conflicting transaction time to finish.
+        usleep(200000 * $attempt);
+      }
+    }
+  }
+
+  /**
+   * Determine if an exception looks like a transient DB lock conflict.
+   */
+  protected function isRetryableDatabaseError(\Throwable $e): bool {
+    $message = $e->getMessage();
+    return strpos($message, 'SQLSTATE[40001]') !== FALSE
+      || strpos($message, 'Deadlock found when trying to get lock') !== FALSE
+      || strpos($message, 'Lock wait timeout exceeded') !== FALSE;
   }
 
   /**
