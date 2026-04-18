@@ -1,5 +1,5 @@
 makehaven_event_capacity.settings:
-  path: '/admin/config/makehaven/event-capacity'
+  path: '/admin/config/makerspace/event-capacity'
   defaults:
     _form: '\Drupal\makehaven_event_capacity\Form\MakeHavenEventCapacitySettingsForm'
     _title: 'MakeHaven Event Capacity Settings'
