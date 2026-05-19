@@ -313,3 +313,154 @@ function _makehaven_event_capacity_field_definitions() {
     ],
   ];
 }
+
+// -----------------------------------------------------------------------------
+// Member-only event soft join-funnel gate.
+//
+// For events flagged as member-only — either event_type_id == 16
+// ("Ticketed Member Only") or whose parent course node has
+// field_course_member_only=1 — non-members are shown a "Join to register" CTA
+// and blocked at submit. Members pass through unchanged. The funnel is soft:
+// the form still renders, the message is clear, the path to membership is one
+// click away.
+// -----------------------------------------------------------------------------
+
+/**
+ * URL the join-funnel CTAs link to. Adjust if the membership landing changes.
+ */
+const MAKEHAVEN_EVENT_CAPACITY_JOIN_URL = '/join';
+
+/**
+ * Implements hook_civicrm_buildForm().
+ *
+ * Inject a "Members-only — join to register" notice on the registration form
+ * for member-only events when the visitor is not a member.
+ */
+function makehaven_event_capacity_civicrm_buildForm($formName, &$form) {
+  if ($formName !== 'CRM_Event_Form_Registration_Register') {
+    return;
+  }
+  $event_id = (int) ($form->getVar('_eventId') ?? 0);
+  if (!_makehaven_event_capacity_event_is_member_only($event_id)) {
+    return;
+  }
+  if (_makehaven_event_capacity_current_user_is_member()) {
+    return;
+  }
+
+  $join_url = htmlspecialchars(MAKEHAVEN_EVENT_CAPACITY_JOIN_URL, ENT_QUOTES);
+  $notice = '<div class="messages messages--warning members-only-notice" role="alert" '
+    . 'style="border-left:4px solid #d6a800;padding:1em;margin:1em 0;background:#fffbe6">'
+    . '<strong>Members-only workshop.</strong> '
+    . 'This Build &amp; Badge session is included with MakeHaven membership. '
+    . '<a class="btn btn-primary" href="' . $join_url . '" '
+    . 'style="margin-left:.5em">Join to register</a>'
+    . '</div>';
+
+  CRM_Core_Region::instance('event-registration-main-region')->add([
+    'markup' => $notice,
+    'weight' => -100,
+  ]);
+}
+
+/**
+ * Implements hook_civicrm_validateForm().
+ *
+ * Block submission of the registration form for non-members on member-only
+ * events. Soft funnel: error message points at the join CTA already injected
+ * by hook_civicrm_buildForm() above.
+ */
+function makehaven_event_capacity_civicrm_validateForm($formName, &$fields, &$files, &$form, &$errors) {
+  if ($formName !== 'CRM_Event_Form_Registration_Register') {
+    return;
+  }
+  $event_id = (int) ($form->getVar('_eventId') ?? 0);
+  if (!_makehaven_event_capacity_event_is_member_only($event_id)) {
+    return;
+  }
+  if (_makehaven_event_capacity_current_user_is_member()) {
+    return;
+  }
+  $errors['_qf_default'] = 'This is a members-only workshop. Please join MakeHaven to register.';
+}
+
+/**
+ * Implements hook_civicrm_pageRun().
+ *
+ * On the public event-info page for a member-only event, prepend a "Join to
+ * attend" CTA so non-members see the funnel before they click Register.
+ */
+function makehaven_event_capacity_civicrm_pageRun(&$page) {
+  if (!is_object($page) || get_class($page) !== 'CRM_Event_Page_EventInfo') {
+    return;
+  }
+  $event_id = (int) ($page->_id ?? 0);
+  if (!_makehaven_event_capacity_event_is_member_only($event_id)) {
+    return;
+  }
+  if (_makehaven_event_capacity_current_user_is_member()) {
+    return;
+  }
+  $join_url = htmlspecialchars(MAKEHAVEN_EVENT_CAPACITY_JOIN_URL, ENT_QUOTES);
+  $cta = '<div class="messages messages--warning members-only-notice" role="alert" '
+    . 'style="border-left:4px solid #d6a800;padding:1em;margin:1em 0;background:#fffbe6">'
+    . '<strong>Members-only workshop.</strong> '
+    . 'Included with MakeHaven membership. '
+    . '<a class="btn btn-primary" href="' . $join_url . '" '
+    . 'style="margin-left:.5em">Join to attend</a>'
+    . '</div>';
+  CRM_Core_Region::instance('event-page-eventinfo-actionlinks-top')->add([
+    'markup' => $cta,
+    'weight' => -100,
+  ]);
+}
+
+/**
+ * True if the event is member-only by either signal:
+ *   - civicrm_event.event_type_id == 16 ("Ticketed Member Only"), OR
+ *   - parent course node has field_course_member_only = 1.
+ */
+function _makehaven_event_capacity_event_is_member_only($event_id) {
+  $event_id = (int) $event_id;
+  if (!$event_id) {
+    return FALSE;
+  }
+  $db = \Drupal::database();
+  $row = $db->query(
+    'SELECT e.event_type_id, p.field_parent_course_target_id AS course_nid
+       FROM {civicrm_event} e
+       LEFT JOIN {civicrm_event__field_parent_course} p ON p.entity_id = e.id
+       WHERE e.id = :id',
+    [':id' => $event_id]
+  )->fetchObject();
+  if (!$row) {
+    return FALSE;
+  }
+  if ((int) $row->event_type_id === 16) {
+    return TRUE;
+  }
+  if (!empty($row->course_nid)) {
+    $flag = $db->query(
+      'SELECT field_course_member_only_value
+         FROM {node__field_course_member_only}
+        WHERE entity_id = :nid
+        LIMIT 1',
+      [':nid' => (int) $row->course_nid]
+    )->fetchField();
+    if ((int) $flag === 1) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * True if the current Drupal user has the `member` role.
+ *
+ * Pending-approval members (member_pending_approval) are intentionally NOT
+ * granted gate-bypass — they're mid-onboarding and shouldn't yet register
+ * for member-only sessions.
+ */
+function _makehaven_event_capacity_current_user_is_member() {
+  return in_array('member', \Drupal::currentUser()->getRoles(), TRUE);
+}
