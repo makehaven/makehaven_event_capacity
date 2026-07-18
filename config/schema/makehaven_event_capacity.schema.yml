@@ -26,6 +26,9 @@ makehaven_event_capacity.settings:
     marketing_notification_hours:
       type: integer
       label: 'Cancellation Warning Hours'
+    site_base_url:
+      type: string
+      label: 'Site base URL for links in notification emails'
 
 field.formatter.settings.makehaven_event_capacity_message:
   type: mapping

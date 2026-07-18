@@ -8,7 +8,8 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Mail\MailManagerInterface;
 use Drupal\Component\Datetime\TimeInterface;
-use Drupal\Core\Url;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Provides helpers for recalculating event capacity stats.
@@ -58,6 +59,13 @@ class EventCapacityUpdater {
   protected $time;
 
   /**
+   * The request stack.
+   *
+   * @var \Symfony\Component\HttpFoundation\RequestStack
+   */
+  protected $requestStack;
+
+  /**
    * Track active updates to prevent recursion.
    *
    * @var array
@@ -79,6 +87,10 @@ class EventCapacityUpdater {
    *   The mail manager.
    * @param \Drupal\Component\Datetime\TimeInterface $time
    *   The time service.
+   * @param \Symfony\Component\HttpFoundation\RequestStack $request_stack
+   *   The request stack, used to guarantee a request context when rendering
+   *   the notification email from a request-less trigger (CiviCRM cron,
+   *   shutdown functions, queue workers).
    */
   public function __construct(
     LoggerChannelFactoryInterface $logger_factory,
@@ -86,7 +98,8 @@ class EventCapacityUpdater {
     $civicrm,
     ConfigFactoryInterface $config_factory,
     MailManagerInterface $mail_manager,
-    TimeInterface $time
+    TimeInterface $time,
+    RequestStack $request_stack,
   ) {
     $this->logger = $logger_factory->get('makehaven_event_capacity');
     $this->entityTypeManager = $entity_type_manager;
@@ -94,6 +107,7 @@ class EventCapacityUpdater {
     $this->configFactory = $config_factory;
     $this->mailManager = $mail_manager;
     $this->time = $time;
+    $this->requestStack = $request_stack;
   }
 
   /**
@@ -178,12 +192,19 @@ class EventCapacityUpdater {
 
     $this->activeUpdates[$event_id] = TRUE;
 
+    // Loading/saving the civicrm_event entity runs access-controlled entity
+    // queries whose cacheability check dereferences the current request. This
+    // updater is frequently triggered from request-less contexts (CiviCRM cron,
+    // shutdown functions registered from hook_civicrm_post), so guarantee a
+    // request for the whole operation to avoid a fatal on a NULL request.
+    $pushed_request = $this->pushRequestIfMissing();
+
     $this->civicrm->initialize();
 
     try {
       // 1. Get Event Details (Capacity).
       $event = civicrm_api3('Event', 'getsingle', ['id' => $event_id]);
-      
+
       // If online registration is disabled, treat capacity as null (unlimited/hidden).
       if (empty($event['is_online_registration'])) {
         $max_participants = NULL;
@@ -210,10 +231,11 @@ class EventCapacityUpdater {
 
       if ($max_participants !== NULL) {
         $remaining = $max_participants - $registered_count;
-        
+
         if ($max_participants > 0) {
           $percent = ($registered_count / $max_participants) * 100;
-        } else {
+        }
+        else {
           $percent = 100;
         }
       }
@@ -228,7 +250,7 @@ class EventCapacityUpdater {
         $entity->set('field_civi_event_registered', $registered_count);
         $entity->set('field_civi_event_remaining', $remaining);
         $entity->set('field_civi_event_full_pct', $percent);
-        
+
         // Also update marketing status since we have the entity loaded and stats calculated.
         $this->updateMarketingStatus($entity);
 
@@ -237,16 +259,22 @@ class EventCapacityUpdater {
 
     }
     catch (\Throwable $e) {
-      $this->logger->error('Failed to update stats for event @id: @message', ['@id' => $event_id, '@message' => $e->getMessage()]);
+      $this->logger->error('Failed to update stats for event @id: @message', [
+        '@id' => $event_id,
+        '@message' => $e->getMessage(),
+      ]);
     }
     finally {
+      if ($pushed_request) {
+        $this->requestStack->pop();
+      }
       unset($this->activeUpdates[$event_id]);
     }
   }
 
   /**
    * Update marketing status for multiple events.
-   * 
+   *
    * @param array $event_ids
    *   Array of entity IDs (not civi IDs, though they are usually same).
    */
@@ -254,12 +282,23 @@ class EventCapacityUpdater {
     if (empty($event_ids)) {
       return;
     }
-    $storage = $this->entityTypeManager->getStorage('civicrm_event');
-    $entities = $storage->loadMultiple($event_ids);
 
-    foreach ($entities as $entity) {
-      $this->updateMarketingStatus($entity);
-      $this->saveEntityWithRetry($entity, (int) $entity->id());
+    // See updateEvent(): guarantee a request context for the entity
+    // load/save so a request-less trigger cannot fatal on cacheability checks.
+    $pushed_request = $this->pushRequestIfMissing();
+    try {
+      $storage = $this->entityTypeManager->getStorage('civicrm_event');
+      $entities = $storage->loadMultiple($event_ids);
+
+      foreach ($entities as $entity) {
+        $this->updateMarketingStatus($entity);
+        $this->saveEntityWithRetry($entity, (int) $entity->id());
+      }
+    }
+    finally {
+      if ($pushed_request) {
+        $this->requestStack->pop();
+      }
     }
   }
 
@@ -323,13 +362,13 @@ class EventCapacityUpdater {
     }
 
     $config = $this->configFactory->get('makehaven_event_capacity.settings');
-    
+
     // Get Stats.
     $pct_full = $entity->get('field_civi_event_full_pct')->value;
     // If percent is null (unlimited), assume 0 for logic? Or 100?
     // Unlimited usually means no marketing needed?
     if ($pct_full === NULL) {
-      $pct_full = 0; 
+      $pct_full = 0;
     }
 
     // Get Start Date.
@@ -347,11 +386,11 @@ class EventCapacityUpdater {
     $eb_threshold = $config->get('marketing_early_bird_threshold') ?? 80;
     $eb_days = $config->get('marketing_early_bird_days') ?? 7;
     $eb_discount = $config->get('marketing_early_bird_discount') ?? 10;
-    
+
     $fs_threshold = $config->get('marketing_flash_sale_threshold') ?? 50;
     $fs_days = $config->get('marketing_flash_sale_days') ?? 2;
     $fs_discount = $config->get('marketing_flash_sale_discount') ?? 25;
-    
+
     $notif_hours = $config->get('marketing_notification_hours') ?? 48;
 
     $status = 'normal';
@@ -360,26 +399,23 @@ class EventCapacityUpdater {
     // Logic:
     // Early Bird: If > EB_Days out AND < EB_Threshold.
     // Flash Sale: If <= FS_Days out AND < FS_Threshold.
-    
     // Check Flash Sale first (priority logic, though time windows usually separate them)
     // Actually, if fs_days is 2 and eb_days is 7.
     // Days > 7: Early Bird Check.
     // Days <= 2: Flash Sale Check.
     // Days 3-7: Normal?
-    
     // Let's support overlapping logic if users set it weirdly, but usually:
-    
     if ($days_until_start > $eb_days) {
       if ($pct_full < $eb_threshold) {
         $status = 'early_bird';
         $discount = $eb_discount;
       }
-    } 
+    }
     elseif ($days_until_start <= $fs_days && $days_until_start > 0) {
-       if ($pct_full < $fs_threshold) {
-         $status = 'flash_sale';
-         $discount = $fs_discount;
-       }
+      if ($pct_full < $fs_threshold) {
+        $status = 'flash_sale';
+        $discount = $fs_discount;
+      }
     }
 
     $entity->set('field_me_marketing_status', $status);
@@ -390,7 +426,17 @@ class EventCapacityUpdater {
     // Note: The "50%" for notification was hardcoded in request: "under 50%... 48 hours before".
     // I will keep 50% hardcoded unless asked, but use the configurable hours.
     if ($hours_until_start > 0 && $hours_until_start <= $notif_hours && $pct_full < 50) {
-      $this->checkLowCapacityWarning($entity, $pct_full, $start_date_str);
+      // A notification failure must never abort the capacity-stat save that
+      // follows in updateEvent(); isolate it and continue.
+      try {
+        $this->checkLowCapacityWarning($entity, $pct_full, $start_date_str);
+      }
+      catch (\Throwable $e) {
+        $this->logger->warning('Low-capacity warning failed for event @id: @message', [
+          '@id' => $entity->id(),
+          '@message' => $e->getMessage(),
+        ]);
+      }
     }
   }
 
@@ -408,19 +454,48 @@ class EventCapacityUpdater {
       return;
     }
 
+    // Build the event link from the configured base URL so it is correct even
+    // when generated from a request-less context (the router request context
+    // resolves to a placeholder host there). The caller (updateEvent /
+    // updateMarketingStatusMultiple) has already guaranteed a request on the
+    // stack, so the mail render will not fatal.
+    $base_url = rtrim((string) ($config->get('site_base_url') ?: 'https://www.makehaven.org'), '/');
     $params = [
       'event_title' => $entity->label(),
       'registered' => $entity->get('field_civi_event_registered')->value,
       'capacity' => $entity->get('field_civi_event_capacity')->value,
       'percent' => $pct_full,
       'start_date' => $start_date_str,
-      'link' => $entity->toUrl('canonical', ['absolute' => TRUE])->toString(),
+      'link' => $base_url . $entity->toUrl('canonical')->toString(),
     ];
-
     $this->mailManager->mail('makehaven_event_capacity', 'low_capacity_warning', $to, 'en', $params);
 
-    // Mark as notified.
+    // Mark as notified only after a successful send, so a failed send does not
+    // suppress a later retry.
     $entity->set('field_me_low_cap_notified', TRUE);
+  }
+
+  /**
+   * Pushes a synthetic request onto the stack when none is active.
+   *
+   * Several triggers (CiviCRM cron, shutdown functions registered from
+   * hook_civicrm_post, queue workers) invoke the updater with no active
+   * request. Access-controlled entity queries and mail rendering then
+   * dereference the current request (e.g. $request->isMethodCacheable()) and
+   * fatal on NULL. Callers must pop the request when this returns TRUE.
+   *
+   * @return bool
+   *   TRUE if a request was pushed (and must be popped), FALSE if one already
+   *   existed.
+   */
+  protected function pushRequestIfMissing(): bool {
+    if ($this->requestStack->getCurrentRequest() !== NULL) {
+      return FALSE;
+    }
+
+    $base_url = rtrim((string) ($this->configFactory->get('makehaven_event_capacity.settings')->get('site_base_url') ?: 'https://www.makehaven.org'), '/');
+    $this->requestStack->push(Request::create($base_url ?: 'https://www.makehaven.org'));
+    return TRUE;
   }
 
 }

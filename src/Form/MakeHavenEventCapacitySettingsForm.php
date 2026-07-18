@@ -143,6 +143,13 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('marketing_notification_email'),
     ];
 
+    $form['notifications']['site_base_url'] = [
+      '#type' => 'url',
+      '#title' => $this->t('Site base URL'),
+      '#description' => $this->t('Base URL used to build event links in notification emails when they are generated outside a web request (e.g. CiviCRM cron). No trailing slash. Defaults to https://www.makehaven.org.'),
+      '#default_value' => $config->get('site_base_url') ?: 'https://www.makehaven.org',
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -159,6 +166,7 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       ->set('marketing_flash_sale_discount', $form_state->getValue('marketing_flash_sale_discount'))
       ->set('marketing_notification_email', $form_state->getValue('marketing_notification_email'))
       ->set('marketing_notification_hours', $form_state->getValue('marketing_notification_hours'))
+      ->set('site_base_url', rtrim((string) $form_state->getValue('site_base_url'), '/'))
       ->save();
 
     parent::submitForm($form, $form_state);
