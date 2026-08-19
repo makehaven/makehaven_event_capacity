@@ -303,6 +303,70 @@ class EventCapacityUpdater {
   }
 
   /**
+   * Stops a stats refresh from overwriting the rest of a repeating series.
+   *
+   * CiviCRM links repeating events through civicrm_recurring_entity. Its
+   * postUpdate listener (CRM_Core_BAO_RecurringEntity::triggerUpdate) copies
+   * every column except the dates - title, summary, description - from the
+   * saved event onto all of its siblings whenever the saved row's mode is
+   * MODE_NEXT_ALL_ENTITY (2) or MODE_ALL_ENTITY_IN_SERIES (3).
+   *
+   * Saving a civicrm_event entity always issues an Event.create
+   * (CiviEntityStorage::doSave()), even when only the derived stat fields
+   * below changed, so a purely mechanical refresh is enough to fire that
+   * cascade. Cron refreshes every upcoming event, so one mode 2/3 row
+   * silently flattens hand-written per-occurrence listings on the next cron
+   * run - this wiped the Second Sundays listings twice in 2026. Staff here
+   * write each occurrence separately, so pin the row to this-event-only
+   * before we save.
+   *
+   * @param int $event_id
+   *   The CiviCRM event ID about to be saved.
+   */
+  protected function preventRecurringCascade(int $event_id): void {
+    if (!$event_id) {
+      return;
+    }
+
+    try {
+      $this->civicrm->initialize();
+
+      $params = [
+        1 => [\CRM_Core_BAO_RecurringEntity::MODE_THIS_ENTITY_ONLY, 'Integer'],
+        2 => [$event_id, 'Integer'],
+        3 => ['civicrm_event', 'String'],
+      ];
+
+      $mode = \CRM_Core_DAO::singleValueQuery(
+        'SELECT mode FROM civicrm_recurring_entity WHERE entity_table = %3 AND entity_id = %2',
+        $params
+      );
+
+      // Not part of a series, or already safe.
+      if ($mode === NULL || (int) $mode === \CRM_Core_BAO_RecurringEntity::MODE_THIS_ENTITY_ONLY) {
+        return;
+      }
+
+      \CRM_Core_DAO::executeQuery(
+        'UPDATE civicrm_recurring_entity SET mode = %1 WHERE entity_table = %3 AND entity_id = %2',
+        $params
+      );
+
+      $this->logger->warning(
+        'Event @id was set to cascade edits across its repeating series (mode @mode). Pinned it to this-event-only so refreshing its stats cannot overwrite the sibling listings.',
+        ['@id' => $event_id, '@mode' => $mode]
+      );
+    }
+    catch (\Throwable $e) {
+      // The guard must never block the refresh it protects.
+      $this->logger->error('Could not check the repeating-series mode for event @id: @message', [
+        '@id' => $event_id,
+        '@message' => $e->getMessage(),
+      ]);
+    }
+  }
+
+  /**
    * Save an entity with retries for transient database lock conflicts.
    *
    * @param \Drupal\Core\Entity\EntityInterface $entity
@@ -313,6 +377,8 @@ class EventCapacityUpdater {
    *   Maximum save attempts.
    */
   protected function saveEntityWithRetry(EntityInterface $entity, int $event_id, int $max_attempts = 3): void {
+    $this->preventRecurringCascade($event_id);
+
     for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
       try {
         $entity->save();
