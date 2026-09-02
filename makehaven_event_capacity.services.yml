@@ -9,3 +9,15 @@ services:
       - '@plugin.manager.mail'
       - '@datetime.time'
       - '@request_stack'
+
+  makehaven_event_capacity.missing_event_subscriber:
+    class: \Drupal\makehaven_event_capacity\EventSubscriber\MissingCiviEventSubscriber
+    arguments:
+      - '@database'
+      - '@logger.channel.makehaven_event_capacity'
+    tags:
+      - { name: event_subscriber }
+
+  logger.channel.makehaven_event_capacity:
+    parent: logger.channel_base
+    arguments: ['makehaven_event_capacity']
