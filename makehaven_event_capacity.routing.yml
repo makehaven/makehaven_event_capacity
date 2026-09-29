@@ -11,7 +11,9 @@ makehaven_event_capacity.member_deals:
     _form: '\Drupal\makehaven_event_capacity\Form\MemberDealsOptInForm'
     _title: 'Last-minute member deals'
   requirements:
-    _role: 'member'
+    # Open to all: the form explains the perk to non-members and only lets
+    # members join.
+    _access: 'TRUE'
 
 makehaven_event_capacity.member_deals_leave:
   path: '/member-deals/leave/{contact_id}/{token}'

@@ -192,3 +192,37 @@ function makehaven_event_capacity_update_9003() {
   ]);
   return "Created CiviCRM group $name (id {$created['id']}).";
 }
+
+/**
+ * Member hub card for the last-minute deal signup.
+ *
+ * The hub's card wall is menu-member-menu (content, so it is created here to
+ * reach every environment). Placed beside Events; falls back to the top level
+ * if that group is missing.
+ */
+function makehaven_event_capacity_update_9004() {
+  $storage = \Drupal::entityTypeManager()->getStorage('menu_link_content');
+  $existing = $storage->loadByProperties([
+    'menu_name' => 'menu-member-menu',
+    'link__uri' => 'internal:/member-deals',
+  ]);
+  if ($existing) {
+    return 'Member hub already links /member-deals.';
+  }
+  $parent = '';
+  $events_group = '10412557-d73d-4f9a-9578-19c75f2357a3';
+  if (\Drupal::service('entity.repository')->loadEntityByUuid('menu_link_content', $events_group)) {
+    $parent = 'menu_link_content:' . $events_group;
+  }
+  $storage->create([
+    'title' => 'Last-Minute Class Deals',
+    'description' => 'Half-price seats in classes that are running, the day before. Opt in here.',
+    'menu_name' => 'menu-member-menu',
+    'link' => ['uri' => 'internal:/member-deals'],
+    'parent' => $parent,
+    'weight' => -63,
+    'expanded' => FALSE,
+    'enabled' => TRUE,
+  ])->save();
+  return 'Added "Last-Minute Class Deals" to the member hub' . ($parent ? ' beside Events.' : ' at the top level (Events group not found).');
+}
