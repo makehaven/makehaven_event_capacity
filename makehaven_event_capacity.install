@@ -169,3 +169,26 @@ function makehaven_event_capacity_update_9002(&$sandbox) {
     return t('Marketing status fields added successfully.');
   }
 }
+
+/**
+ * Seat-fill rules: opt-in group for the last-minute member deal.
+ *
+ * Settings come from config sync; this only creates the CiviCRM group
+ * (looked up by name at runtime, so its id may differ per environment).
+ */
+function makehaven_event_capacity_update_9003() {
+  \Drupal::service('civicrm')->initialize();
+  $name = \Drupal::config('makehaven_event_capacity.settings')->get('member_deal_group') ?: 'member_flash_deals';
+  $existing = civicrm_api3('Group', 'get', ['name' => $name, 'sequential' => 1]);
+  if (!empty($existing['count'])) {
+    return "Group $name already exists (id {$existing['values'][0]['id']}).";
+  }
+  $created = civicrm_api3('Group', 'create', [
+    'name' => $name,
+    'title' => 'Member last-minute deals',
+    'description' => 'Members who asked for the last-minute workshop deal email (makehaven_event_capacity). Join/leave at /member-deals.',
+    'visibility' => 'User and User Admin Only',
+    'is_active' => 1,
+  ]);
+  return "Created CiviCRM group $name (id {$created['id']}).";
+}

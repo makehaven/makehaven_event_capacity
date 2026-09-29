@@ -55,8 +55,9 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
 
     $form['early_bird'] = [
       '#type' => 'details',
-      '#title' => $this->t('Early Bird / Capacity Discount'),
-      '#open' => TRUE,
+      '#title' => $this->t('Early Bird (retired)'),
+      '#open' => FALSE,
+      '#description' => $this->t('No longer used since 2026-09-29: it advertised a discount no price set gave. See Seat fill below.'),
     ];
 
     $form['early_bird']['marketing_early_bird_threshold'] = [
@@ -89,8 +90,9 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
 
     $form['flash_sale'] = [
       '#type' => 'details',
-      '#title' => $this->t('Urgent / Flash Sale'),
-      '#open' => TRUE,
+      '#title' => $this->t('Flash Sale (retired)'),
+      '#open' => FALSE,
+      '#description' => $this->t('No longer used since 2026-09-29: it advertised a discount on under-filled classes that no code gave. See Seat fill below.'),
     ];
 
     $form['flash_sale']['marketing_flash_sale_threshold'] = [
@@ -150,6 +152,82 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       '#default_value' => $config->get('site_base_url') ?: 'https://www.makehaven.org',
     ];
 
+    $form['seat_fill'] = [
+      '#type' => 'details',
+      '#title' => $this->t('Seat fill: at-risk notice and last-minute member deal'),
+      '#open' => TRUE,
+      '#description' => $this->t('A class is "running" once this share of its seats is sold to attendees (instructors do not count). Under it, and within the at-risk window, the event page asks people to register so it runs; no discount. At or over it with seats to spare, members who opted in at /member-deals get one email about a day before, with a CiviDiscount code limited to the seats left. <code>drush mh-seat-fill</code> shows what the rules make of the next two weeks without changing anything.'),
+    ];
+    $types = [];
+    if (\Drupal::database()->schema()->tableExists('civicrm_option_value')) {
+      $q = \Drupal::database()->select('civicrm_option_value', 'ov');
+      $q->join('civicrm_option_group', 'og', "og.id = ov.option_group_id AND og.name = 'event_type'");
+      $types = $q->fields('ov', ['value', 'label'])->condition('ov.is_active', 1)->orderBy('ov.label')->execute()->fetchAllKeyed();
+    }
+    $form['seat_fill']['seat_fill_event_types'] = [
+      '#type' => 'checkboxes',
+      '#title' => $this->t('Event types'),
+      '#options' => $types,
+      '#default_value' => array_map('strval', (array) ($config->get('seat_fill_event_types') ?? [6, 16])),
+      '#description' => $this->t('Only these types are ever considered. Leave bigger-ticket programs out.'),
+    ];
+    $form['seat_fill']['seat_fill_include_gems'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Also GEMS cohorts (Program events with GEMS in the title)'),
+      '#default_value' => (bool) $config->get('seat_fill_include_gems'),
+    ];
+    $form['seat_fill']['seat_fill_run_threshold'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Running threshold (% of seats sold)'),
+      '#default_value' => $config->get('seat_fill_run_threshold') ?? 50,
+      '#min' => 1,
+      '#max' => 100,
+    ];
+    $form['seat_fill']['seat_fill_at_risk_days'] = [
+      '#type' => 'number',
+      '#title' => $this->t('At-risk notice: days before start'),
+      '#default_value' => $config->get('seat_fill_at_risk_days') ?? 10,
+      '#min' => 0,
+    ];
+    $form['seat_fill']['member_deal_enabled'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Send the last-minute member deal'),
+      '#default_value' => (bool) $config->get('member_deal_enabled'),
+    ];
+    $form['seat_fill']['member_deal_lead_hours'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Send this many hours before start'),
+      '#default_value' => $config->get('member_deal_lead_hours') ?? 24,
+      '#min' => 1,
+    ];
+    $form['seat_fill']['member_deal_min_seats'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Only when at least this many seats are left'),
+      '#description' => $this->t('One or two seats usually sell at full price.'),
+      '#default_value' => $config->get('member_deal_min_seats') ?? 3,
+      '#min' => 1,
+    ];
+    $form['seat_fill']['member_deal_discount'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Discount (%)'),
+      '#default_value' => $config->get('member_deal_discount') ?? 50,
+      '#min' => 1,
+      '#max' => 100,
+    ];
+    $form['seat_fill']['member_deal_subject'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Email subject'),
+      '#default_value' => $config->get('member_deal_subject') ?: _makehaven_event_capacity_member_deal_default('subject'),
+      '#maxlength' => 200,
+    ];
+    $form['seat_fill']['member_deal_body'] = [
+      '#type' => 'textarea',
+      '#title' => $this->t('Email body'),
+      '#rows' => 14,
+      '#default_value' => $config->get('member_deal_body') ?: _makehaven_event_capacity_member_deal_default('body'),
+      '#description' => $this->t('Plain text. Tokens: [first_name], [event_title], [event_date], [discount], [seats], [code], [register_url], [leave_url] (keep it: it is how people stop these).'),
+    ];
+
     return parent::buildForm($form, $form_state);
   }
 
@@ -167,6 +245,16 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       ->set('marketing_notification_email', $form_state->getValue('marketing_notification_email'))
       ->set('marketing_notification_hours', $form_state->getValue('marketing_notification_hours'))
       ->set('site_base_url', rtrim((string) $form_state->getValue('site_base_url'), '/'))
+      ->set('seat_fill_event_types', array_values(array_map('intval', array_filter((array) $form_state->getValue('seat_fill_event_types')))))
+      ->set('seat_fill_include_gems', (bool) $form_state->getValue('seat_fill_include_gems'))
+      ->set('seat_fill_run_threshold', (int) $form_state->getValue('seat_fill_run_threshold'))
+      ->set('seat_fill_at_risk_days', (int) $form_state->getValue('seat_fill_at_risk_days'))
+      ->set('member_deal_enabled', (bool) $form_state->getValue('member_deal_enabled'))
+      ->set('member_deal_lead_hours', (int) $form_state->getValue('member_deal_lead_hours'))
+      ->set('member_deal_min_seats', (int) $form_state->getValue('member_deal_min_seats'))
+      ->set('member_deal_discount', (int) $form_state->getValue('member_deal_discount'))
+      ->set('member_deal_subject', (string) $form_state->getValue('member_deal_subject'))
+      ->set('member_deal_body', (string) $form_state->getValue('member_deal_body'))
       ->save();
 
     parent::submitForm($form, $form_state);

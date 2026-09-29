@@ -1,0 +1,8 @@
+services:
+  makehaven_event_capacity.commands:
+    class: \Drupal\makehaven_event_capacity\Commands\MakeHavenEventCapacityCommands
+    arguments:
+      - '@makehaven_event_capacity.updater'
+      - '@makehaven_event_capacity.seat_fill'
+    tags:
+      - { name: drush.command }

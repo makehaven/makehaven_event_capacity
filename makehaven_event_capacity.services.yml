@@ -10,6 +10,17 @@ services:
       - '@datetime.time'
       - '@request_stack'
 
+  makehaven_event_capacity.seat_fill:
+    class: \Drupal\makehaven_event_capacity\SeatFillService
+    arguments:
+      - '@database'
+      - '@config.factory'
+      - '@state'
+      - '@plugin.manager.mail'
+      - '@datetime.time'
+      - '@logger.factory'
+      - '@civicrm'
+
   makehaven_event_capacity.missing_event_subscriber:
     class: \Drupal\makehaven_event_capacity\EventSubscriber\MissingCiviEventSubscriber
     arguments:

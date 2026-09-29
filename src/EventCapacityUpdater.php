@@ -448,41 +448,22 @@ class EventCapacityUpdater {
     $days_until_start = $seconds_until_start / 86400;
     $hours_until_start = $seconds_until_start / 3600;
 
-    // Config Values.
-    $eb_threshold = $config->get('marketing_early_bird_threshold') ?? 80;
-    $eb_days = $config->get('marketing_early_bird_days') ?? 7;
-    $eb_discount = $config->get('marketing_early_bird_discount') ?? 10;
-
-    $fs_threshold = $config->get('marketing_flash_sale_threshold') ?? 50;
-    $fs_days = $config->get('marketing_flash_sale_days') ?? 2;
-    $fs_discount = $config->get('marketing_flash_sale_discount') ?? 25;
-
-    $notif_hours = $config->get('marketing_notification_hours') ?? 48;
-
-    $status = 'normal';
+    // Seat-fill rules (2026-09-29): an in-scope class under the run threshold
+    // inside the help-it-run window is "at risk" and says so; nothing else
+    // gets a public marketing banner. The old Early Bird (10%) and Flash Sale
+    // (25%) statuses promised discounts that no price set or code ever gave,
+    // and Flash Sale fired on exactly the classes that should not be
+    // discounted. The real discount is the opt-in member deal
+    // (SeatFillService), which is emailed, not shown on the page.
+    $status = \Drupal::service('makehaven_event_capacity.seat_fill')->marketingStatus(
+      (int) $entity->id(),
+      (int) ($entity->get('event_type_id')->target_id ?? $entity->get('event_type_id')->value ?? 0),
+      (string) $entity->label(),
+      $entity->hasField('field_civi_event_capacity') ? (int) $entity->get('field_civi_event_capacity')->value : NULL,
+      $start_timestamp
+    );
     $discount = 0;
-
-    // Logic:
-    // Early Bird: If > EB_Days out AND < EB_Threshold.
-    // Flash Sale: If <= FS_Days out AND < FS_Threshold.
-    // Check Flash Sale first (priority logic, though time windows usually separate them)
-    // Actually, if fs_days is 2 and eb_days is 7.
-    // Days > 7: Early Bird Check.
-    // Days <= 2: Flash Sale Check.
-    // Days 3-7: Normal?
-    // Let's support overlapping logic if users set it weirdly, but usually:
-    if ($days_until_start > $eb_days) {
-      if ($pct_full < $eb_threshold) {
-        $status = 'early_bird';
-        $discount = $eb_discount;
-      }
-    }
-    elseif ($days_until_start <= $fs_days && $days_until_start > 0) {
-      if ($pct_full < $fs_threshold) {
-        $status = 'flash_sale';
-        $discount = $fs_discount;
-      }
-    }
+    $notif_hours = $config->get('marketing_notification_hours') ?? 48;
 
     $entity->set('field_me_marketing_status', $status);
     $entity->set('field_me_marketing_discount', $discount);

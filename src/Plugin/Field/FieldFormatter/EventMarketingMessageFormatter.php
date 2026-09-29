@@ -27,6 +27,7 @@ class EventMarketingMessageFormatter extends FormatterBase {
     return [
       'message_early_bird' => 'Early Bird Special! Save @discount%!',
       'message_flash_sale' => 'Flash Sale! Save @discount% now!',
+      'message_at_risk' => 'This class needs a few more people to run. Register now to make sure it happens.',
     ] + parent::defaultSettings();
   }
 
@@ -50,6 +51,14 @@ class EventMarketingMessageFormatter extends FormatterBase {
       '#default_value' => $this->getSetting('message_flash_sale'),
     ];
 
+    $elements['message_at_risk'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('At risk message'),
+      '#description' => $this->t('Shown on in-scope classes that are under the run threshold and starting soon. No discount.'),
+      '#default_value' => $this->getSetting('message_at_risk'),
+      '#maxlength' => 255,
+    ];
+
     return $elements;
   }
 
@@ -60,6 +69,7 @@ class EventMarketingMessageFormatter extends FormatterBase {
     $summary = [];
     $summary[] = $this->t('Early Bird: "@text"', ['@text' => $this->getSetting('message_early_bird')]);
     $summary[] = $this->t('Flash Sale: "@text"', ['@text' => $this->getSetting('message_flash_sale')]);
+    $summary[] = $this->t('At risk: "@text"', ['@text' => $this->getSetting('message_at_risk')]);
     return $summary;
   }
 
@@ -86,6 +96,9 @@ class EventMarketingMessageFormatter extends FormatterBase {
       }
       elseif ($status === 'flash_sale') {
         $output = str_replace('@discount', $discount, $msg_flash);
+      }
+      elseif ($status === 'at_risk') {
+        $output = $this->getSetting('message_at_risk');
       }
 
       if (!empty($output)) {

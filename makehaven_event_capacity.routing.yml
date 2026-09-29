@@ -5,3 +5,19 @@ makehaven_event_capacity.settings:
     _title: 'MakeHaven Event Capacity Settings'
   requirements:
     _permission: 'administer site configuration'
+makehaven_event_capacity.member_deals:
+  path: '/member-deals'
+  defaults:
+    _form: '\Drupal\makehaven_event_capacity\Form\MemberDealsOptInForm'
+    _title: 'Last-minute member deals'
+  requirements:
+    _role: 'member'
+
+makehaven_event_capacity.member_deals_leave:
+  path: '/member-deals/leave/{contact_id}/{token}'
+  defaults:
+    _form: '\Drupal\makehaven_event_capacity\Form\MemberDealsLeaveForm'
+    _title: 'Member deals'
+  requirements:
+    _access: 'TRUE'
+    contact_id: \d+

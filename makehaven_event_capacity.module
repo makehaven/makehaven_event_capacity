@@ -183,6 +183,15 @@ function _makehaven_event_capacity_configure_display($bundle, $field_name, array
 
     }
 
+    // Last-minute member deal (off unless member_deal_enabled). Isolated so a
+    // CiviDiscount or mail failure cannot break the capacity refresh above.
+    try {
+      \Drupal::service('makehaven_event_capacity.seat_fill')->run();
+    }
+    catch (\Throwable $e) {
+      \Drupal::logger('makehaven_event_capacity')->error('Member deal run failed: @m', ['@m' => $e->getMessage()]);
+    }
+
   }
 
   
@@ -194,6 +203,25 @@ function _makehaven_event_capacity_configure_display($bundle, $field_name, array
    */
 
   function makehaven_event_capacity_mail($key, &$message, $params) {
+
+    if ($key === 'member_deal') {
+      $config = \Drupal::config('makehaven_event_capacity.settings');
+      $replace = [
+        '[first_name]' => $params['first_name'],
+        '[event_title]' => $params['event_title'],
+        '[event_date]' => $params['event_date'],
+        '[discount]' => $params['discount'],
+        '[seats]' => $params['seats'],
+        '[code]' => $params['code'],
+        '[register_url]' => $params['register_url'],
+        '[leave_url]' => $params['leave_url'],
+      ];
+      $subject = $config->get('member_deal_subject') ?: _makehaven_event_capacity_member_deal_default('subject');
+      $body = $config->get('member_deal_body') ?: _makehaven_event_capacity_member_deal_default('body');
+      $message['subject'] = strtr($subject, $replace);
+      $message['body'][] = strtr($body, $replace);
+      return;
+    }
 
     if ($key === 'low_capacity_warning') {
 
@@ -463,4 +491,29 @@ function _makehaven_event_capacity_event_is_member_only($event_id) {
  */
 function _makehaven_event_capacity_current_user_is_member() {
   return in_array('member', \Drupal::currentUser()->getRoles(), TRUE);
+}
+/**
+ * Default copy for the last-minute member deal email.
+ */
+function _makehaven_event_capacity_member_deal_default(string $which): string {
+  if ($which === 'subject') {
+    return 'Members\' deal: [discount]% off [event_title], tomorrow';
+  }
+  return "Hi [first_name],
+
+[event_title] runs [event_date] and still has [seats] open seats. It is
+happening either way, so we would rather fill them: as a member who asked
+for last-minute deals, you can take [discount]% off.
+
+Register here (the discount is already applied):
+[register_url]
+
+Or enter code [code] at checkout. One per person, and only until the seats
+are gone or the class starts.
+
+See you in the shop,
+MakeHaven
+
+You get these because you opted in to member deals. Stop them here:
+[leave_url]";
 }

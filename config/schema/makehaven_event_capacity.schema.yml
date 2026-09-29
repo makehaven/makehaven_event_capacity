@@ -29,6 +29,44 @@ makehaven_event_capacity.settings:
     site_base_url:
       type: string
       label: 'Site base URL for links in notification emails'
+    seat_fill_event_types:
+      type: sequence
+      label: 'CiviCRM event types the seat-fill rules apply to'
+      sequence:
+        type: integer
+    seat_fill_include_gems:
+      type: boolean
+      label: 'Also apply to GEMS cohorts (Program events titled GEMS)'
+    seat_fill_run_threshold:
+      type: integer
+      label: 'Percent of seats sold to attendees for a class to count as running'
+    seat_fill_at_risk_days:
+      type: integer
+      label: 'Days before start that an under-threshold class shows as at risk'
+    member_deal_enabled:
+      type: boolean
+      label: 'Send the last-minute member deal'
+    member_deal_lead_hours:
+      type: integer
+      label: 'Hours before start the deal goes out'
+    member_deal_min_lead_hours:
+      type: integer
+      label: 'Never send the deal later than this many hours before start'
+    member_deal_min_seats:
+      type: integer
+      label: 'Minimum seats left for a deal'
+    member_deal_discount:
+      type: integer
+      label: 'Deal discount (%)'
+    member_deal_group:
+      type: string
+      label: 'CiviCRM group name holding the opt-ins'
+    member_deal_subject:
+      type: label
+      label: 'Deal email subject'
+    member_deal_body:
+      type: text
+      label: 'Deal email body'
 
 field.formatter.settings.makehaven_event_capacity_message:
   type: mapping
@@ -63,3 +101,6 @@ field.formatter.settings.makehaven_event_marketing_message:
     message_flash_sale:
       type: label
       label: 'Flash Sale Message'
+    message_at_risk:
+      type: label
+      label: 'At risk message'
