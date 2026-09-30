@@ -157,13 +157,15 @@ function _makehaven_event_capacity_configure_display($bundle, $field_name, array
 
     // To be efficient, we might want to query Drupal's civicrm_event entities that have a start date in future.
 
+    // The CiviCRM entity query returns 25 rows unless given a range, so
+    // before 2026-09-30 only 25 of ~56 upcoming events were ever refreshed:
+    // the rest kept stale banners (the retired Early Bird / Flash Sale).
     $query = \Drupal::entityQuery('civicrm_event')
-
       ->accessCheck(FALSE)
-
       ->exists('start_date')
-
-      ->condition('start_date', date('Y-m-d H:i:s'), '>=');
+      ->condition('start_date', date('Y-m-d H:i:s'), '>=')
+      ->sort('start_date', 'ASC')
+      ->range(0, 2000);
 
     
 
