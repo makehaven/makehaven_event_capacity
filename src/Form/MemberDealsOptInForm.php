@@ -96,7 +96,7 @@ class MemberDealsOptInForm extends FormBase {
     // People looking for "member discounts" usually mean the local businesses.
     $form['elsewhere'] = [
       '#markup' => '<aside class="mh-lms__elsewhere"><h2 class="mh-lms__h2">' . $this->t('Looking for something else?') . '</h2><ul>'
-      . '<li>' . $this->t('<a href=":url">Member discounts at local businesses</a>: food, parking, supplies and more, in Suppliers and Community Resources.', [':url' => '/community-resources']) . '</li>'
+      . '<li>' . $this->t('<a href=":url">All member perks</a>, including discounts at local businesses (food, supplies and more) with a perk card to show at the counter.', [':url' => '/member-perks']) . '</li>'
       . '<li>' . $this->t('<a href=":url">All upcoming classes</a> at the regular price.', [':url' => '/events']) . '</li>'
       . '</ul></aside>',
     ];
