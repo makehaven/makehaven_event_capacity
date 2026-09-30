@@ -1,0 +1,103 @@
+/* Last-Minute Class Seats (/last-minute-seats). Tokens from the d11 theme,
+   with fallbacks for themes that do not define them. */
+.mh-lms {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+.mh-lms__eyebrow {
+  display: inline-block;
+  margin: 0 0 var(--mh-space-xs, 0.5rem);
+  padding: 0.15rem 0.65rem;
+  border-radius: var(--mh-radius-pill, 999px);
+  background: var(--mh-color-brand-primary, #8b1919);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mh-lms__lede {
+  font-size: 1.3rem;
+  line-height: 1.4;
+  font-weight: 600;
+  margin-bottom: var(--mh-space-sm, 0.75rem);
+}
+.mh-lms__card {
+  margin: var(--mh-space-lg, 1.5rem) 0;
+  padding: var(--mh-space-lg, 1.5rem);
+  border: 1px solid rgb(0 0 0 / 0.1);
+  border-left: 6px solid var(--mh-color-brand-primary, #8b1919);
+  border-radius: var(--mh-radius-lg, 0.75rem);
+  background: var(--mh-color-surface-muted, #f8f9fa);
+  box-shadow: var(--mh-shadow-sm, 0 2px 4px rgb(0 0 0 / 0.12));
+}
+.mh-lms__card.is-in {
+  border-left-color: #2e7d32;
+}
+.mh-lms__status {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 var(--mh-space-sm, 0.75rem);
+}
+.mh-lms__card .form-actions,
+.mh-lms__cta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mh-space-sm, 0.75rem);
+}
+.mh-lms__h2 {
+  font-size: 1.25rem;
+  margin: var(--mh-space-xl, 2rem) 0 var(--mh-space-md, 1rem);
+}
+.mh-lms__steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--mh-space-md, 1rem);
+}
+.mh-lms__steps li {
+  display: flex;
+  gap: var(--mh-space-md, 1rem);
+  align-items: flex-start;
+}
+.mh-lms__num {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--mh-color-brand-primary, #8b1919);
+  color: #fff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mh-lms__fine {
+  margin-top: var(--mh-space-lg, 1.5rem);
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+.mh-lms__elsewhere {
+  margin-top: var(--mh-space-xl, 2rem);
+  padding: var(--mh-space-md, 1rem) var(--mh-space-lg, 1.5rem);
+  border: 1px dashed rgb(0 0 0 / 0.2);
+  border-radius: var(--mh-radius-md, 0.5rem);
+}
+.mh-lms__elsewhere .mh-lms__h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+.mh-lms__elsewhere ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+@media (min-width: 768px) {
+  .mh-lms__steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .mh-lms__steps li {
+    flex-direction: column;
+  }
+}

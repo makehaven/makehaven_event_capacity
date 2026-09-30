@@ -156,7 +156,7 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       '#type' => 'details',
       '#title' => $this->t('Seat fill: at-risk notice and last-minute member deal'),
       '#open' => TRUE,
-      '#description' => $this->t('A class is "running" once this share of its seats is sold to attendees (instructors do not count). Under it, and within the at-risk window, the event page asks people to register so it runs; no discount. At or over it with seats to spare, members who opted in at /member-deals get one email about a day before, with a CiviDiscount code limited to the seats left. <code>drush mh-seat-fill</code> shows what the rules make of the next two weeks without changing anything.'),
+      '#description' => $this->t('A class is "running" once this share of its seats is sold to attendees (instructors do not count). Under it, and within the at-risk window, the event page asks people to register so it runs; no discount. At or over it with seats to spare, members who opted in at /last-minute-seats get one email about a day before, with a CiviDiscount code limited to the seats left. <code>drush mh-seat-fill</code> shows what the rules make of the next two weeks without changing anything.'),
     ];
     $types = [];
     if (\Drupal::database()->schema()->tableExists('civicrm_option_value')) {

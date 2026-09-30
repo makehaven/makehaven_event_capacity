@@ -185,8 +185,8 @@ function makehaven_event_capacity_update_9003() {
   }
   $created = civicrm_api3('Group', 'create', [
     'name' => $name,
-    'title' => 'Member last-minute deals',
-    'description' => 'Members who asked for the last-minute workshop deal email (makehaven_event_capacity). Join/leave at /member-deals.',
+    'title' => 'Last-Minute Class Seats (member opt-in)',
+    'description' => 'Members who asked for the last-minute workshop deal email (makehaven_event_capacity). Join/leave at /last-minute-seats.',
     'visibility' => 'User and User Admin Only',
     'is_active' => 1,
   ]);
@@ -204,10 +204,10 @@ function makehaven_event_capacity_update_9004() {
   $storage = \Drupal::entityTypeManager()->getStorage('menu_link_content');
   $existing = $storage->loadByProperties([
     'menu_name' => 'menu-member-menu',
-    'link__uri' => 'internal:/member-deals',
+    'link__uri' => ['internal:/member-deals', 'internal:/last-minute-seats'],
   ]);
   if ($existing) {
-    return 'Member hub already links /member-deals.';
+    return 'Member hub already links the last-minute seats page.';
   }
   $parent = '';
   $events_group = '10412557-d73d-4f9a-9578-19c75f2357a3';
@@ -215,14 +215,46 @@ function makehaven_event_capacity_update_9004() {
     $parent = 'menu_link_content:' . $events_group;
   }
   $storage->create([
-    'title' => 'Last-Minute Class Deals',
+    'title' => 'Last-Minute Class Seats',
     'description' => 'Half-price seats in classes that are running, the day before. Opt in here.',
     'menu_name' => 'menu-member-menu',
-    'link' => ['uri' => 'internal:/member-deals'],
+    'link' => ['uri' => 'internal:/last-minute-seats'],
     'parent' => $parent,
     'weight' => -63,
     'expanded' => FALSE,
     'enabled' => TRUE,
   ])->save();
-  return 'Added "Last-Minute Class Deals" to the member hub' . ($parent ? ' beside Events.' : ' at the top level (Events group not found).');
+  return 'Added "Last-Minute Class Seats" to the member hub' . ($parent ? ' beside Events.' : ' at the top level (Events group not found).');
+}
+
+/**
+ * Rename the perk to "Last-Minute Class Seats" (/member-deals → /last-minute-seats).
+ *
+ * JR 2026-09-30, before the perk was announced: "deals" could mean anything
+ * (members also get discounts at local businesses). Renames the member hub
+ * card and its link, and the CiviCRM opt-in group's title (its name, which the
+ * code looks up, is unchanged).
+ */
+function makehaven_event_capacity_update_9005() {
+  $done = [];
+  $storage = \Drupal::entityTypeManager()->getStorage('menu_link_content');
+  foreach ($storage->loadByProperties(['menu_name' => 'menu-member-menu', 'link__uri' => 'internal:/member-deals']) as $link) {
+    $link->set('title', 'Last-Minute Class Seats');
+    $link->set('link', ['uri' => 'internal:/last-minute-seats']);
+    $link->save();
+    $done[] = 'hub card renamed';
+  }
+  if (\Drupal::moduleHandler()->moduleExists('civicrm')) {
+    \Drupal::service('civicrm')->initialize();
+    $name = \Drupal::config('makehaven_event_capacity.settings')->get('member_deal_group') ?: 'member_flash_deals';
+    $n = \Civi\Api4\Group::update(FALSE)
+      ->addWhere('name', '=', $name)
+      ->addValue('title', 'Last-Minute Class Seats (member opt-in)')
+      ->execute()
+      ->count();
+    if ($n) {
+      $done[] = 'CiviCRM group retitled';
+    }
+  }
+  return $done ? 'Last-Minute Class Seats: ' . implode(', ', $done) . '.' : 'Nothing to rename.';
 }

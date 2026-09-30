@@ -340,7 +340,7 @@ class SeatFillService {
     $sent = 0;
     foreach ($recipients as $r) {
       $params['first_name'] = $r['first_name'] ?: 'there';
-      $params['leave_url'] = $base . '/member-deals/leave/' . $r['contact_id'] . '/' . self::leaveToken((int) $r['contact_id']);
+      $params['leave_url'] = $base . '/last-minute-seats/leave/' . $r['contact_id'] . '/' . self::leaveToken((int) $r['contact_id']);
       $result = $this->mailManager->mail('makehaven_event_capacity', 'member_deal', $r['email'], 'en', $params);
       if (!empty($result['result'])) {
         $sent++;

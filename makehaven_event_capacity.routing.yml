@@ -6,20 +6,37 @@ makehaven_event_capacity.settings:
   requirements:
     _permission: 'administer site configuration'
 makehaven_event_capacity.member_deals:
-  path: '/member-deals'
+  path: '/last-minute-seats'
   defaults:
     _form: '\Drupal\makehaven_event_capacity\Form\MemberDealsOptInForm'
-    _title: 'Last-minute member deals'
+    _title: 'Last-Minute Class Seats'
   requirements:
     # Open to all: the form explains the perk to non-members and only lets
     # members join.
     _access: 'TRUE'
 
 makehaven_event_capacity.member_deals_leave:
+  path: '/last-minute-seats/leave/{contact_id}/{token}'
+  defaults:
+    _form: '\Drupal\makehaven_event_capacity\Form\MemberDealsLeaveForm'
+    _title: 'Last-Minute Class Seats'
+  requirements:
+    _access: 'TRUE'
+    contact_id: \d+
+
+# The page was /member-deals until 2026-09-30 (renamed before it was announced).
+makehaven_event_capacity.member_deals_legacy:
+  path: '/member-deals'
+  defaults:
+    _controller: '\Drupal\makehaven_event_capacity\Controller\LastMinuteSeatsRedirectController::page'
+  requirements:
+    _access: 'TRUE'
+
+makehaven_event_capacity.member_deals_leave_legacy:
   path: '/member-deals/leave/{contact_id}/{token}'
   defaults:
     _form: '\Drupal\makehaven_event_capacity\Form\MemberDealsLeaveForm'
-    _title: 'Member deals'
+    _title: 'Last-Minute Class Seats'
   requirements:
     _access: 'TRUE'
     contact_id: \d+

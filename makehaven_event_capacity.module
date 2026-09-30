@@ -495,17 +495,17 @@ function _makehaven_event_capacity_current_user_is_member() {
   return in_array('member', \Drupal::currentUser()->getRoles(), TRUE);
 }
 /**
- * Default copy for the last-minute member deal email.
+ * Default copy for the Last-Minute Class Seats email.
  */
 function _makehaven_event_capacity_member_deal_default(string $which): string {
   if ($which === 'subject') {
-    return 'Members\' deal: [discount]% off [event_title], tomorrow';
+    return 'Half-price seat: [event_title], tomorrow';
   }
   return "Hi [first_name],
 
 [event_title] runs [event_date] and still has [seats] open seats. It is
-happening either way, so we would rather fill them: as a member who asked
-for last-minute deals, you can take [discount]% off.
+happening either way, so we would rather fill them: as a member on the
+Last-Minute Class Seats list, you can take [discount]% off.
 
 Register here (the discount is already applied):
 [register_url]
@@ -516,6 +516,6 @@ are gone or the class starts.
 See you in the shop,
 MakeHaven
 
-You get these because you opted in to member deals. Stop them here:
+You get these because you joined Last-Minute Class Seats. Stop them here:
 [leave_url]";
 }

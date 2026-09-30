@@ -1,0 +1,4 @@
+last_minute_seats:
+  css:
+    theme:
+      css/last-minute-seats.css: {}

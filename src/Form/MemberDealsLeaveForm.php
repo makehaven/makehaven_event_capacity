@@ -31,12 +31,12 @@ class MemberDealsLeaveForm extends FormBase {
     }
     $form_state->set('contact_id', $contact_id);
     $form['intro'] = [
-      '#markup' => '<p>' . $this->t('Stop the last-minute member deal emails?') . '</p>',
+      '#markup' => '<p>' . $this->t('Stop the Last-Minute Class Seats emails?') . '</p>',
     ];
     $form['actions'] = ['#type' => 'actions'];
     $form['actions']['submit'] = [
       '#type' => 'submit',
-      '#value' => $this->t('Stop sending me deals'),
+      '#value' => $this->t('Stop these emails'),
     ];
     $form['#cache'] = ['max-age' => 0];
     return $form;
@@ -47,7 +47,7 @@ class MemberDealsLeaveForm extends FormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
     \Drupal::service('makehaven_event_capacity.seat_fill')->setOptIn((int) $form_state->get('contact_id'), FALSE);
-    $this->messenger()->addStatus($this->t('Done. You will not get member deals any more. You can join again at /member-deals.'));
+    $this->messenger()->addStatus($this->t('Done. You will not get Last-Minute Class Seats emails any more. You can join again at /last-minute-seats.'));
   }
 
 }
