@@ -227,23 +227,28 @@ function _makehaven_event_capacity_configure_display($bundle, $field_name, array
 
     if ($key === 'low_capacity_warning') {
 
-      $message['subject'] = t('Low Capacity Warning: @title', ['@title' => $params['event_title']]);
+      // Cast every placeholder: a NULL reaching Html::escape() is a TypeError.
+      $title = (string) ($params['event_title'] ?? '');
+      $message['subject'] = t('Low Capacity Warning: @title', ['@title' => $title]);
 
-      $message['body'][] = t('The event "@title" is starting in less than 48 hours and is under 50% capacity.', ['@title' => $params['event_title']]);
+      $message['body'][] = t('The event "@title" is starting in less than @hours hours and is under 50% capacity.', [
+        '@title' => $title,
+        '@hours' => (string) ($params['hours'] ?? '48'),
+      ]);
 
       $message['body'][] = t('Current Capacity: @registered / @capacity (@percent%)', [
 
-        '@registered' => $params['registered'],
+        '@registered' => (string) ($params['registered'] ?? '0'),
 
-        '@capacity' => $params['capacity'],
+        '@capacity' => (string) ($params['capacity'] ?? '0'),
 
-        '@percent' => number_format($params['percent'], 1),
+        '@percent' => number_format((float) ($params['percent'] ?? 0), 1),
 
       ]);
 
-      $message['body'][] = t('Start Date: @date', ['@date' => $params['start_date']]);
+      $message['body'][] = t('Start Date: @date', ['@date' => (string) ($params['start_date'] ?? '')]);
 
-      $message['body'][] = t('Link: @url', ['@url' => $params['link']]);
+      $message['body'][] = t('Link: @url', ['@url' => (string) ($params['link'] ?? '')]);
 
     }
 

@@ -429,13 +429,11 @@ class EventCapacityUpdater {
 
     $config = $this->configFactory->get('makehaven_event_capacity.settings');
 
-    // Get Stats.
+    // Get Stats. A NULL percent means the event has no capacity limit (or no
+    // online registration), so there is nothing to be "under" - see
+    // shouldSendLowCapacityWarning().
     $pct_full = $entity->get('field_civi_event_full_pct')->value;
-    // If percent is null (unlimited), assume 0 for logic? Or 100?
-    // Unlimited usually means no marketing needed?
-    if ($pct_full === NULL) {
-      $pct_full = 0;
-    }
+    $capacity = $entity->hasField('field_civi_event_capacity') ? $entity->get('field_civi_event_capacity')->value : NULL;
 
     // Get Start Date.
     $start_date_str = $entity->get('start_date')->value;
@@ -468,23 +466,61 @@ class EventCapacityUpdater {
     $entity->set('field_me_marketing_status', $status);
     $entity->set('field_me_marketing_discount', $discount);
 
-    // Notifications Check.
-    // Condition: 0 < hours <= NOTIF_HOURS AND pct < 50.
-    // Note: The "50%" for notification was hardcoded in request: "under 50%... 48 hours before".
-    // I will keep 50% hardcoded unless asked, but use the configurable hours.
-    if ($hours_until_start > 0 && $hours_until_start <= $notif_hours && $pct_full < 50) {
+    // Notifications Check: a capped event under 50% full that starts within
+    // the notification window, warned once per event.
+    $already_notified = $entity->hasField('field_me_low_cap_notified') && (bool) $entity->get('field_me_low_cap_notified')->value;
+    if (static::shouldSendLowCapacityWarning($capacity, $pct_full, $hours_until_start, (float) $notif_hours, $already_notified)) {
       // A notification failure must never abort the capacity-stat save that
-      // follows in updateEvent(); isolate it and continue.
+      // follows in updateEvent(); isolate it and continue. It is still an
+      // error: the warning to education staff did not go out.
       try {
-        $this->checkLowCapacityWarning($entity, $pct_full, $start_date_str);
+        $this->checkLowCapacityWarning($entity, (float) $pct_full, $start_date_str);
       }
       catch (\Throwable $e) {
-        $this->logger->warning('Low-capacity warning failed for event @id: @message', [
+        $this->logger->error('Low-capacity warning failed for event @id: @message', [
           '@id' => $entity->id(),
           '@message' => $e->getMessage(),
         ]);
       }
     }
+  }
+
+  /**
+   * Decides whether an event should trigger the low-enrolment warning.
+   *
+   * Only capped events can be "under 50% full". Unlimited events - meetups,
+   * open houses, community nights, and events without online registration -
+   * store a NULL capacity and NULL percent. They used to be treated as 0%
+   * full, so every one of them hit the warning inside the window and then
+   * fatalled rendering a NULL capacity into the email (343 failures on live,
+   * 2026-09-23 to 10-11, retried on every refresh because the flag was never
+   * set).
+   *
+   * @param int|string|null $capacity
+   *   Max participants, or NULL when unlimited.
+   * @param float|string|null $pct_full
+   *   Percent full, or NULL when unlimited.
+   * @param float $hours_until_start
+   *   Hours until the event starts (negative once it has started).
+   * @param float $window_hours
+   *   The notification window, in hours.
+   * @param bool $already_notified
+   *   Whether this event has already been warned about.
+   *
+   * @return bool
+   *   TRUE when the warning should be sent now.
+   */
+  public static function shouldSendLowCapacityWarning($capacity, $pct_full, float $hours_until_start, float $window_hours, bool $already_notified): bool {
+    if ($already_notified) {
+      return FALSE;
+    }
+    if ($capacity === NULL || $capacity === '' || (int) $capacity <= 0 || $pct_full === NULL || $pct_full === '') {
+      return FALSE;
+    }
+    if ($hours_until_start <= 0 || $hours_until_start > $window_hours) {
+      return FALSE;
+    }
+    return (float) $pct_full < 50;
   }
 
   /**
@@ -507,19 +543,33 @@ class EventCapacityUpdater {
     // updateMarketingStatusMultiple) has already guaranteed a request on the
     // stack, so the mail render will not fatal.
     $base_url = rtrim((string) ($config->get('site_base_url') ?: 'https://www.makehaven.org'), '/');
+    // Every placeholder value must be a string: FormattableMarkup passes them
+    // to Html::escape(), which throws a TypeError on NULL.
     $params = [
-      'event_title' => $entity->label(),
-      'registered' => $entity->get('field_civi_event_registered')->value,
-      'capacity' => $entity->get('field_civi_event_capacity')->value,
-      'percent' => $pct_full,
-      'start_date' => $start_date_str,
+      'event_title' => (string) $entity->label(),
+      'registered' => (string) (int) $entity->get('field_civi_event_registered')->value,
+      'capacity' => (string) (int) $entity->get('field_civi_event_capacity')->value,
+      'percent' => (float) $pct_full,
+      'hours' => (string) (int) ($config->get('marketing_notification_hours') ?? 48),
+      'start_date' => (string) $start_date_str,
       'link' => $base_url . $entity->toUrl('canonical')->toString(),
     ];
-    $this->mailManager->mail('makehaven_event_capacity', 'low_capacity_warning', $to, 'en', $params);
+    $result = $this->mailManager->mail('makehaven_event_capacity', 'low_capacity_warning', $to, 'en', $params);
 
     // Mark as notified only after a successful send, so a failed send does not
     // suppress a later retry.
+    if (empty($result['result'])) {
+      $this->logger->error('Low-capacity warning for event @id was not sent: the mail system reported a failure.', [
+        '@id' => $entity->id(),
+      ]);
+      return;
+    }
     $entity->set('field_me_low_cap_notified', TRUE);
+    $this->logger->notice('Low-capacity warning sent for event @id (@registered/@capacity).', [
+      '@id' => $entity->id(),
+      '@registered' => $params['registered'],
+      '@capacity' => $params['capacity'],
+    ]);
   }
 
   /**
