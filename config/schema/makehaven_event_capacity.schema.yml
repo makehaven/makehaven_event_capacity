@@ -46,6 +46,9 @@ makehaven_event_capacity.settings:
     member_deal_enabled:
       type: boolean
       label: 'Send the last-minute member deal'
+    member_deal_promote:
+      type: boolean
+      label: 'Invite members to the deal list in the weekly digest'
     member_deal_lead_hours:
       type: integer
       label: 'Hours before start the deal goes out'

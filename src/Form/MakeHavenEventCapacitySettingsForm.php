@@ -194,6 +194,12 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       '#title' => $this->t('Send the last-minute member deal'),
       '#default_value' => (bool) $config->get('member_deal_enabled'),
     ];
+    $form['seat_fill']['member_deal_promote'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Invite members to join the list in the weekly digest'),
+      '#description' => $this->t('Shows a short "Join the list" box to members who are not on it yet. Switch on when the deal is announced.'),
+      '#default_value' => (bool) $config->get('member_deal_promote'),
+    ];
     $form['seat_fill']['member_deal_lead_hours'] = [
       '#type' => 'number',
       '#title' => $this->t('Send this many hours before start'),
@@ -251,6 +257,7 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       ->set('seat_fill_run_threshold', (int) $form_state->getValue('seat_fill_run_threshold'))
       ->set('seat_fill_at_risk_days', (int) $form_state->getValue('seat_fill_at_risk_days'))
       ->set('member_deal_enabled', (bool) $form_state->getValue('member_deal_enabled'))
+      ->set('member_deal_promote', (bool) $form_state->getValue('member_deal_promote'))
       ->set('member_deal_lead_hours', (int) $form_state->getValue('member_deal_lead_hours'))
       ->set('member_deal_min_seats', (int) $form_state->getValue('member_deal_min_seats'))
       ->set('member_deal_discount', (int) $form_state->getValue('member_deal_discount'))
