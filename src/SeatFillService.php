@@ -6,6 +6,8 @@ use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Utility\Crypt;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\Mail\MailManagerInterface;
 use Drupal\Core\Site\Settings;
@@ -49,6 +51,8 @@ class SeatFillService {
     protected TimeInterface $time,
     protected LoggerChannelFactoryInterface $loggerFactory,
     protected $civicrm,
+    protected ?EntityTypeManagerInterface $entityTypeManager = NULL,
+    protected ?FileUrlGeneratorInterface $fileUrlGenerator = NULL,
   ) {}
 
   /**
@@ -273,6 +277,136 @@ class SeatFillService {
   }
 
   /**
+   * Site URL that email links point at.
+   */
+  protected function baseUrl(): string {
+    return rtrim((string) ($this->config()->get('site_base_url') ?: 'https://www.makehaven.org'), '/');
+  }
+
+  /**
+   * Everything the email shows about one class, except the recipient's name
+   * and leave link.
+   *
+   * @see \Drupal\makehaven_event_capacity\MemberDealEmail::html()
+   */
+  public function dealParams(object $event, int $discount, int $seats, string $code): array {
+    $id = (int) $event->id;
+    $base = $this->baseUrl();
+    $row = $this->database->select('civicrm_event', 'e')
+      ->fields('e', ['summary', 'end_date'])
+      ->condition('e.id', $id)
+      ->execute()
+      ->fetchObject();
+    $start = strtotime($event->start_date);
+    $end = !empty($row->end_date) ? strtotime($row->end_date) : NULL;
+    $before = $this->memberPrice($id);
+    $config = $this->config();
+    return [
+      'event_title' => (string) $event->title,
+      'event_date' => date('l, F j \a\t g:ia', $start),
+      'event_day' => date('l, F j', $start),
+      'event_time' => date('g:ia', $start) . ($end && date('Y-m-d', $end) === date('Y-m-d', $start) ? '–' . date('g:ia', $end) : ''),
+      'discount' => $discount,
+      'seats' => $seats,
+      'code' => $code,
+      'register_url' => $base . '/civicrm/event/register?reset=1&id=' . $id . '&discountcode=' . $code,
+      'event_url' => $base . '/civicrm/event/info?reset=1&id=' . $id,
+      'image_url' => $this->imageUrl($id),
+      'summary' => trim(strip_tags((string) ($row->summary ?? ''))),
+      'price_before' => $before,
+      'price_after' => $before !== NULL ? round($before * (100 - $discount) / 100, 2) : NULL,
+      'intro' => (string) ($config->get('member_deal_body') ?: MemberDealEmail::DEFAULT_INTRO),
+    ];
+  }
+
+  /**
+   * What a member normally pays: the lowest active "member" price, else the
+   * lowest paid price. NULL when the event has no paid price.
+   */
+  protected function memberPrice(int $event_id): ?float {
+    $q = $this->database->select('civicrm_price_set_entity', 'pse');
+    $q->join('civicrm_price_field', 'pf', 'pf.price_set_id = pse.price_set_id');
+    $q->join('civicrm_price_field_value', 'pfv', 'pfv.price_field_id = pf.id');
+    $q->fields('pfv', ['label', 'amount'])
+      ->condition('pse.entity_table', 'civicrm_event')
+      ->condition('pse.entity_id', $event_id)
+      ->condition('pf.is_active', 1)
+      ->condition('pfv.is_active', 1)
+      ->condition('pfv.amount', 0, '>');
+    $member = NULL;
+    $lowest = NULL;
+    foreach ($q->execute() as $r) {
+      $amount = (float) $r->amount;
+      $lowest = $lowest === NULL ? $amount : min($lowest, $amount);
+      if (stripos((string) $r->label, 'member') !== FALSE) {
+        $member = $member === NULL ? $amount : min($member, $amount);
+      }
+    }
+    return $member ?? $lowest;
+  }
+
+  /**
+   * The class photo the event page shows, or '' when there is none.
+   */
+  protected function imageUrl(int $event_id): string {
+    if (!$this->entityTypeManager || !$this->fileUrlGenerator) {
+      return '';
+    }
+    try {
+      $event = $this->entityTypeManager->getStorage('civicrm_event')->load($event_id);
+      if (!$event) {
+        return '';
+      }
+      foreach (['field_civi_event_media_image', 'field_civi_event_image', 'field_media_image_1'] as $field) {
+        if (!$event->hasField($field) || $event->get($field)->isEmpty()) {
+          continue;
+        }
+        $target = $event->get($field)->entity;
+        if ($target && $target->getEntityTypeId() === 'media') {
+          $fid = $target->getSource()->getSourceFieldValue($target);
+          $target = $fid ? $this->entityTypeManager->getStorage('file')->load($fid) : NULL;
+        }
+        if ($target && $target->getEntityTypeId() === 'file') {
+          $uri = $target->getFileUri();
+          $style = $this->entityTypeManager->getStorage('image_style')->load('event_image');
+          $url = $style ? $style->buildUrl($uri) : $this->fileUrlGenerator->generateAbsoluteString($uri);
+          // Generated outside a web request the host can come out as
+          // http://default; email needs the public https address.
+          return preg_replace('~^https?://[^/]+~', $this->baseUrl(), $url);
+        }
+      }
+    }
+    catch (\Throwable $e) {
+      // A missing photo only costs the picture, never the offer.
+    }
+    return '';
+  }
+
+  /**
+   * Emails one person the offer for a class as it would go out now.
+   *
+   * Creates no discount code and records no offer: the code in the email is
+   * PREVIEW and does nothing. For checking the design before an announcement.
+   */
+  public function sendPreview(int $event_id, string $email): bool {
+    $event = $this->database->select('civicrm_event', 'e')
+      ->fields('e', ['id', 'title', 'event_type_id', 'start_date', 'max_participants', 'is_online_registration'])
+      ->condition('e.id', $event_id)
+      ->execute()
+      ->fetchObject();
+    if (!$event) {
+      return FALSE;
+    }
+    $discount = (int) ($this->config()->get('member_deal_discount') ?? 50);
+    $seats = $event->max_participants ? $this->seatsLeft($event_id, (int) $event->max_participants) : 0;
+    $params = $this->dealParams($event, $discount, $seats, 'PREVIEW');
+    $params['first_name'] = 'there';
+    $params['leave_url'] = $this->baseUrl() . '/member-deals';
+    $result = $this->mailManager->mail('makehaven_event_capacity', 'member_deal', $email, 'en', $params);
+    return !empty($result['result']);
+  }
+
+  /**
    * Creates the discount code and emails the opted-in members.
    *
    * The offer is recorded before any email goes out, so a failure half way
@@ -328,19 +462,11 @@ class SeatFillService {
     ];
     $this->state->set(self::OFFERS_STATE_KEY, $offers);
 
-    $base = rtrim((string) ($config->get('site_base_url') ?: 'https://www.makehaven.org'), '/');
-    $params = [
-      'event_title' => (string) $event->title,
-      'event_date' => date('l, F j \a\t g:ia', strtotime($event->start_date)),
-      'discount' => $discount,
-      'seats' => (int) $verdict['seats_left'],
-      'code' => $code,
-      'register_url' => $base . '/civicrm/event/register?reset=1&id=' . $id . '&discountcode=' . $code,
-    ];
+    $params = $this->dealParams($event, $discount, (int) $verdict['seats_left'], $code);
     $sent = 0;
     foreach ($recipients as $r) {
       $params['first_name'] = $r['first_name'] ?: 'there';
-      $params['leave_url'] = $base . '/last-minute-seats/leave/' . $r['contact_id'] . '/' . self::leaveToken((int) $r['contact_id']);
+      $params['leave_url'] = $this->baseUrl() . '/last-minute-seats/leave/' . $r['contact_id'] . '/' . self::leaveToken((int) $r['contact_id']);
       $result = $this->mailManager->mail('makehaven_event_capacity', 'member_deal', $r['email'], 'en', $params);
       if (!empty($result['result'])) {
         $sent++;

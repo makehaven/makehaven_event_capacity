@@ -219,13 +219,14 @@ class MakeHavenEventCapacitySettingsForm extends ConfigFormBase {
       '#title' => $this->t('Email subject'),
       '#default_value' => $config->get('member_deal_subject') ?: _makehaven_event_capacity_member_deal_default('subject'),
       '#maxlength' => 200,
+      '#description' => $this->t('Tokens: [event_title], [event_date], [discount], [seats].'),
     ];
     $form['seat_fill']['member_deal_body'] = [
       '#type' => 'textarea',
-      '#title' => $this->t('Email body'),
-      '#rows' => 14,
+      '#title' => $this->t('Email intro'),
+      '#rows' => 4,
       '#default_value' => $config->get('member_deal_body') ?: _makehaven_event_capacity_member_deal_default('body'),
-      '#description' => $this->t('Plain text. Tokens: [first_name], [event_title], [event_date], [discount], [seats], [code], [register_url], [leave_url] (keep it: it is how people stop these).'),
+      '#description' => $this->t('The paragraph under the greeting. Plain text; tokens [discount], [seats], [event_title]. The photo, date, price, button, code and stop link are added around it. Preview: drush mh-deal-preview EVENT_ID you@example.org'),
     ];
 
     return parent::buildForm($form, $form_state);

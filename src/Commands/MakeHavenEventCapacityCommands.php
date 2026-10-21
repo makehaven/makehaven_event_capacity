@@ -128,4 +128,25 @@ class MakeHavenEventCapacityCommands extends DrushCommands {
     $this->logger()->success('Offer made. See the watchdog entry for the code and send count.');
   }
 
+
+  /**
+   * Emails one address the member deal for a class, as it would look now.
+   *
+   * Creates no discount code and records no offer; the code shown is PREVIEW.
+   *
+   * @command makehaven:member-deal-preview
+   * @aliases mh-deal-preview
+   * @param int $event_id The CiviCRM event id.
+   * @param string $email Where to send the preview.
+   * @usage mh-deal-preview 783 jrlogan@makehaven.org
+   */
+  public function memberDealPreview(int $event_id, string $email) {
+    if ($this->seatFill->sendPreview($event_id, $email)) {
+      $this->logger()->success(sprintf('Preview for event %d sent to %s.', $event_id, $email));
+    }
+    else {
+      $this->logger()->error('Preview not sent: event not found or the mailer refused it.');
+    }
+  }
+
 }
