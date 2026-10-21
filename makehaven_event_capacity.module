@@ -506,17 +506,16 @@ function _makehaven_event_capacity_member_deal_default(string $which): string {
   if ($which === 'subject') {
     return 'Half-price seat: [event_title], tomorrow';
   }
+  // One line per paragraph: the mailer wraps at 77 characters, and copy that
+  // is already wrapped gets wrapped twice once a long class title is filled in.
   return "Hi [first_name],
 
-[event_title] runs [event_date] and still has [seats] open seats. It is
-happening either way, so we would rather fill them: as a member on the
-Last-Minute Class Seats list, you can take [discount]% off.
+[event_title] runs [event_date] and still has [seats] open seats. It is happening either way, so we would rather fill them: as a member on the Last-Minute Class Seats list, you can take [discount]% off.
 
 Register here (the discount is already applied):
 [register_url]
 
-Or enter code [code] at checkout. One per person, and only until the seats
-are gone or the class starts.
+Or enter code [code] at checkout. One per person, and only until the seats are gone or the class starts.
 
 See you in the shop,
 MakeHaven
