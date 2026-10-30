@@ -380,15 +380,25 @@ function makehaven_event_capacity_civicrm_buildForm($formName, &$form) {
   }
 
   $join_url = htmlspecialchars(MAKEHAVEN_EVENT_CAPACITY_JOIN_URL, ENT_QUOTES);
+  $login_url = '';
+  if (\Drupal::currentUser()->isAnonymous()) {
+    $login_url = htmlspecialchars(\Drupal\Core\Url::fromRoute('user.login', [], [
+      'query' => ['destination' => \Drupal::request()->getRequestUri()],
+    ])->toString(), ENT_QUOTES);
+  }
   $notice = '<div class="messages messages--warning members-only-notice" role="alert" '
     . 'style="border-left:4px solid #d6a800;padding:1em;margin:1em 0;background:#fffbe6">'
     . '<strong>Members-only workshop.</strong> '
     . 'This Build &amp; Badge session is included with MakeHaven membership. '
     . '<a class="btn btn-primary" href="' . $join_url . '" '
     . 'style="margin-left:.5em">Join to register</a>'
+    . ($login_url ? ' <a href="' . $login_url . '" style="margin-left:.5em">Already a member? Log in</a>' : '')
     . '</div>';
 
-  CRM_Core_Region::instance('event-registration-main-region')->add([
+  // 'form-top' is the first region inside every CiviCRM form. The notice used
+  // to target a region the registration template does not have, so it never
+  // rendered and non-members only learned at submit.
+  CRM_Core_Region::instance('form-top')->add([
     'markup' => $notice,
     'weight' => -100,
   ]);
