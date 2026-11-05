@@ -379,29 +379,43 @@ function makehaven_event_capacity_civicrm_buildForm($formName, &$form) {
     return;
   }
 
-  $join_url = htmlspecialchars(MAKEHAVEN_EVENT_CAPACITY_JOIN_URL, ENT_QUOTES);
-  $login_url = '';
-  if (\Drupal::currentUser()->isAnonymous()) {
-    $login_url = htmlspecialchars(\Drupal\Core\Url::fromRoute('user.login', [], [
-      'query' => ['destination' => \Drupal::request()->getRequestUri()],
-    ])->toString(), ENT_QUOTES);
+  // Non-members may browse a members-only event but not reach its form (JR
+  // 2026-11-05): filling in a whole form to be refused at submit helps nobody.
+  // The event page carries the join and log-in links. Staff keep the form so
+  // they can check it, with the notice saying what a non-member would hit.
+  if (!\Drupal::currentUser()->hasPermission('edit all events')) {
+    CRM_Utils_System::redirect(CRM_Utils_System::url('civicrm/event/info', "reset=1&id={$event_id}", TRUE, NULL, FALSE));
+    return;
   }
-  $notice = '<div class="messages messages--warning members-only-notice" role="alert" '
-    . 'style="border-left:4px solid #d6a800;padding:1em;margin:1em 0;background:#fffbe6">'
-    . '<strong>Members-only workshop.</strong> '
-    . 'This Build &amp; Badge session is included with MakeHaven membership. '
-    . '<a class="btn btn-primary" href="' . $join_url . '" '
-    . 'style="margin-left:.5em">Join to register</a>'
-    . ($login_url ? ' <a href="' . $login_url . '" style="margin-left:.5em">Already a member? Log in</a>' : '')
-    . '</div>';
 
-  // 'form-top' is the first region inside every CiviCRM form. The notice used
-  // to target a region the registration template does not have, so it never
-  // rendered and non-members only learned at submit.
+  // 'form-top' is the first region inside every CiviCRM form.
   CRM_Core_Region::instance('form-top')->add([
-    'markup' => $notice,
+    'markup' => _makehaven_event_capacity_members_only_notice($event_id),
     'weight' => -100,
   ]);
+}
+
+/**
+ * The members-only notice with its join and log-in links.
+ *
+ * Styled by .mh-members-only in the theme's events-modern.css. The log-in link
+ * is for anonymous visitors only: /user/login returns 403 when logged in.
+ */
+function _makehaven_event_capacity_members_only_notice(int $event_id): string {
+  $join_url = htmlspecialchars(MAKEHAVEN_EVENT_CAPACITY_JOIN_URL, ENT_QUOTES);
+  $login = '';
+  if (\Drupal::currentUser()->isAnonymous()) {
+    $login_url = htmlspecialchars(\Drupal\Core\Url::fromRoute('user.login', [], [
+      'query' => ['destination' => "/civicrm/event/register?reset=1&id={$event_id}"],
+    ])->toString(), ENT_QUOTES);
+    $login = ' <a class="mh-members-only__login" href="' . $login_url . '">Already a member? Log in</a>';
+  }
+  return '<div class="members-only-notice mh-members-only">'
+    . '<p class="mh-members-only__text"><strong>Members-only workshop.</strong> Open to MakeHaven members.</p>'
+    . '<div class="mh-members-only__actions">'
+    . '<a class="btn btn-primary" href="' . $join_url . '">Join to register</a>'
+    . $login
+    . '</div></div>';
 }
 
 /**
@@ -428,32 +442,45 @@ function makehaven_event_capacity_civicrm_validateForm($formName, &$fields, &$fi
 /**
  * Implements hook_civicrm_pageRun().
  *
- * On the public event-info page for a member-only event, prepend a "Join to
- * attend" CTA so non-members see the funnel before they click Register.
+ * On the public event page:
+ * - a member-only event shows non-members the join and log-in links in place
+ *   of Register (staff keep Register so they can reach the form to check it);
+ * - a full event with a waitlist says so on its button.
+ *
+ * Regions: the -bottom region, because the theme hides .crm-actionlinks-top
+ * with CSS. The theme's events-info-hero.js repeats this block near the top of
+ * the page. Event id: getEventID(), because $page->_id is protected, so reading
+ * it from here gave NULL and this hook returned early on every request.
  */
 function makehaven_event_capacity_civicrm_pageRun(&$page) {
   if (!is_object($page) || get_class($page) !== 'CRM_Event_Page_EventInfo') {
     return;
   }
-  $event_id = (int) ($page->_id ?? 0);
-  if (!_makehaven_event_capacity_event_is_member_only($event_id)) {
+  $event_id = (int) $page->getEventID();
+  if (!$event_id) {
     return;
   }
-  if (_makehaven_event_capacity_current_user_is_member()) {
+
+  if (_makehaven_event_capacity_event_is_member_only($event_id) && !_makehaven_event_capacity_current_user_is_member()) {
+    if (!\Drupal::currentUser()->hasPermission('edit all events')) {
+      $page->assign('allowRegistration', FALSE);
+    }
+    CRM_Core_Region::instance('event-page-eventinfo-actionlinks-bottom')->add([
+      'markup' => _makehaven_event_capacity_members_only_notice($event_id),
+      'weight' => -100,
+    ]);
     return;
   }
-  $join_url = htmlspecialchars(MAKEHAVEN_EVENT_CAPACITY_JOIN_URL, ENT_QUOTES);
-  $cta = '<div class="messages messages--warning members-only-notice" role="alert" '
-    . 'style="border-left:4px solid #d6a800;padding:1em;margin:1em 0;background:#fffbe6">'
-    . '<strong>Members-only workshop.</strong> '
-    . 'Included with MakeHaven membership. '
-    . '<a class="btn btn-primary" href="' . $join_url . '" '
-    . 'style="margin-left:.5em">Join to attend</a>'
-    . '</div>';
-  CRM_Core_Region::instance('event-page-eventinfo-actionlinks-top')->add([
-    'markup' => $cta,
-    'weight' => -100,
-  ]);
+
+  if (CRM_Event_BAO_Participant::eventFull($event_id)) {
+    $has_waitlist = \Drupal::database()->query(
+      'SELECT has_waitlist FROM {civicrm_event} WHERE id = :id',
+      [':id' => $event_id]
+    )->fetchField();
+    if ($has_waitlist) {
+      $page->assign('registerText', 'Join the waiting list');
+    }
+  }
 }
 
 /**
