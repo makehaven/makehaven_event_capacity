@@ -118,6 +118,32 @@ class SeatFillService {
   }
 
   /**
+   * Hours the waiting list has the open seats to itself before a deal.
+   */
+  public const WAITLIST_FIRST_HOURS = 6;
+
+  /**
+   * Whether people waiting on this date were emailed about open seats lately.
+   *
+   * In a class's last three days instructor_companion emails the waiting
+   * list each time a seat opens (WaitlistOpenSeats, log kind seat_alert).
+   * Those people asked for this date and pay full price, so the member deal
+   * waits (JR, 2026-11-17). Reads that module's log; no log, no wait.
+   */
+  public function waitingListJustTold(int $event_id): bool {
+    $table = 'instructor_companion_waitlist_log';
+    if (!$this->database->schema()->tableExists($table)) {
+      return FALSE;
+    }
+    $since = $this->time->getRequestTime() - self::WAITLIST_FIRST_HOURS * 3600;
+    return (bool) $this->database->select($table, 'l')
+      ->condition('l.kind', 'seat_alert')
+      ->condition('l.event_id', $event_id)
+      ->condition('l.created', $since, '>=')
+      ->countQuery()->execute()->fetchField();
+  }
+
+  /**
    * Seats CiviCRM will still sell: capacity minus every counted participant.
    */
   public function seatsLeft(int $event_id, int $max): int {
@@ -209,6 +235,10 @@ class SeatFillService {
     }
     if (!$this->hasPaidPrice($id)) {
       $out['reason'] = 'free event';
+      return $out;
+    }
+    if ($this->waitingListJustTold($id)) {
+      $out['reason'] = sprintf('waiting list was told about these seats under %d h ago: they get a chance at full price first', self::WAITLIST_FIRST_HOURS);
       return $out;
     }
     $out['eligible'] = TRUE;
